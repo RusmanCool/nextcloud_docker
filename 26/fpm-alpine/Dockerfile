@@ -54,12 +54,10 @@ RUN set -ex; \
 # pecl will claim success even if one install fails, so we need to perform each install separately
     pecl install APCu-5.1.22; \
     pecl install imagick-3.7.0; \
-    pecl install redis-5.3.7; \
     \
     docker-php-ext-enable \
         apcu \
         imagick \
-        redis \
     ; \
     rm -r /tmp/pear; \
     \
