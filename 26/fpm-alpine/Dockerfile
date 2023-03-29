@@ -26,7 +26,6 @@ RUN set -ex; \
         libevent-dev \
         libjpeg-turbo-dev \
         libmcrypt-dev \
-        libmemcached-dev \
         libpng-dev \
         libwebp-dev \
         libxml2-dev \
@@ -55,13 +54,11 @@ RUN set -ex; \
 # pecl will claim success even if one install fails, so we need to perform each install separately
     pecl install APCu-5.1.22; \
     pecl install imagick-3.7.0; \
-    pecl install memcached-3.2.0; \
     pecl install redis-5.3.7; \
     \
     docker-php-ext-enable \
         apcu \
         imagick \
-        memcached \
         redis \
     ; \
     rm -r /tmp/pear; \
