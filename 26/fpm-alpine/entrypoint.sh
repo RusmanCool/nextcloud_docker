@@ -156,9 +156,9 @@ if expr "$1" : "apache" 1>/dev/null || [ "$1" = "php-fpm" ] || [ "${NEXTCLOUD_UP
                         install_options=$install_options' --data-dir "$NEXTCLOUD_DATA_DIR"'
                     fi
 
-                    file_env MYSQL_DATABASE
-                    file_env MYSQL_PASSWORD
-                    file_env MYSQL_USER
+#                    file_env MYSQL_DATABASE
+#                    file_env MYSQL_PASSWORD
+#                    file_env MYSQL_USER
                     file_env POSTGRES_DB
                     file_env POSTGRES_PASSWORD
                     file_env POSTGRES_USER
@@ -169,11 +169,11 @@ if expr "$1" : "apache" 1>/dev/null || [ "$1" = "php-fpm" ] || [ "${NEXTCLOUD_UP
                         # shellcheck disable=SC2016
                         install_options=$install_options' --database-name "$SQLITE_DATABASE"'
                         install=true
-                    elif [ -n "${MYSQL_DATABASE+x}" ] && [ -n "${MYSQL_USER+x}" ] && [ -n "${MYSQL_PASSWORD+x}" ] && [ -n "${MYSQL_HOST+x}" ]; then
-                        echo "Installing with MySQL database"
+#                    elif [ -n "${MYSQL_DATABASE+x}" ] && [ -n "${MYSQL_USER+x}" ] && [ -n "${MYSQL_PASSWORD+x}" ] && [ -n "${MYSQL_HOST+x}" ]; then
+#                        echo "Installing with MySQL database"
                         # shellcheck disable=SC2016
-                        install_options=$install_options' --database mysql --database-name "$MYSQL_DATABASE" --database-user "$MYSQL_USER" --database-pass "$MYSQL_PASSWORD" --database-host "$MYSQL_HOST"'
-                        install=true
+#                        install_options=$install_options' --database mysql --database-name "$MYSQL_DATABASE" --database-user "$MYSQL_USER" --database-pass "$MYSQL_PASSWORD" --database-host "$MYSQL_HOST"'
+#                        install=true
                     elif [ -n "${POSTGRES_DB+x}" ] && [ -n "${POSTGRES_USER+x}" ] && [ -n "${POSTGRES_PASSWORD+x}" ] && [ -n "${POSTGRES_HOST+x}" ]; then
                         echo "Installing with PostgreSQL database"
                         # shellcheck disable=SC2016
