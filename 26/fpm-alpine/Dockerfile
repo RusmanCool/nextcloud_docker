@@ -1,5 +1,5 @@
 # DO NOT EDIT: created by update.sh from Dockerfile-alpine.template
-FROM php:8.1-fpm-alpine3.17
+FROM php:8.2-fpm-alpine3.19
 
 # entrypoint.sh and cron.sh dependencies
 RUN set -ex; \
@@ -52,7 +52,7 @@ RUN set -ex; \
     ; \
     \
 # pecl will claim success even if one install fails, so we need to perform each install separately
-    pecl install APCu-5.1.22; \
+    pecl install APCu-5.1.23; \
     pecl install imagick-3.7.0; \
     \
     docker-php-ext-enable \
@@ -67,8 +67,8 @@ RUN set -ex; \
             | sort -u \
             | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
     )"; \
-    apk add --virtual .nextcloud-phpext-rundeps $runDeps; \
-    apk del .build-deps
+    apk add --no-network --virtual .nextcloud-phpext-rundeps $runDeps; \
+    apk del --no-network .build-deps
 
 # set recommended PHP.ini settings
 # see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
@@ -95,13 +95,18 @@ RUN { \
     } > "${PHP_INI_DIR}/conf.d/nextcloud.ini"; \
     \
     mkdir /var/www/data; \
+    mkdir -p /docker-entrypoint-hooks.d/pre-installation \
+             /docker-entrypoint-hooks.d/post-installation \
+             /docker-entrypoint-hooks.d/pre-upgrade \
+             /docker-entrypoint-hooks.d/post-upgrade \
+             /docker-entrypoint-hooks.d/before-starting; \
     chown -R www-data:root /var/www; \
     chmod -R g=u /var/www
 
 VOLUME /var/www/html
 
 
-ENV NEXTCLOUD_VERSION 26.0.0
+ENV NEXTCLOUD_VERSION 26.0.13
 
 RUN set -ex; \
     apk add --no-cache --virtual .fetch-deps \
@@ -124,7 +129,7 @@ RUN set -ex; \
     mkdir -p /usr/src/nextcloud/data; \
     mkdir -p /usr/src/nextcloud/custom_apps; \
     chmod +x /usr/src/nextcloud/occ; \
-    apk del .fetch-deps
+    apk del --no-network .fetch-deps
 
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/
