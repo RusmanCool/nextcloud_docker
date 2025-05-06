@@ -1,5 +1,5 @@
 # DO NOT EDIT: created by update.sh from Dockerfile-debian.template
-FROM php:8.1-fpm-bullseye
+FROM php:8.2-fpm-bookworm
 
 # entrypoint.sh and cron.sh dependencies
 RUN set -ex; \
@@ -45,11 +45,13 @@ RUN set -ex; \
     ; \
     \
     debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
+    docker-php-ext-configure ftp --with-openssl-dir=/usr; \
     docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp; \
     docker-php-ext-configure ldap --with-libdir="lib/$debMultiarch"; \
     docker-php-ext-install -j "$(nproc)" \
         bcmath \
         exif \
+        ftp \
         gd \
         gmp \
         intl \
@@ -63,10 +65,10 @@ RUN set -ex; \
     ; \
     \
 # pecl will claim success even if one install fails, so we need to perform each install separately
-    pecl install APCu-5.1.22; \
+    pecl install APCu-5.1.23; \
     pecl install imagick-3.7.0; \
     pecl install memcached-3.2.0; \
-    pecl install redis-5.3.7; \
+    pecl install redis-6.0.2; \
     \
     docker-php-ext-enable \
         apcu \
@@ -80,9 +82,9 @@ RUN set -ex; \
     apt-mark auto '.*' > /dev/null; \
     apt-mark manual $savedAptMark; \
     ldd "$(php -r 'echo ini_get("extension_dir");')"/*.so \
-        | awk '/=>/ { print $3 }' \
+        | awk '/=>/ { so = $(NF-1); if (index(so, "/usr/local/") == 1) { next }; gsub("^/(usr/)?", "", so); print so }' \
         | sort -u \
-        | xargs -r dpkg-query -S \
+        | xargs -r dpkg-query --search \
         | cut -d: -f1 \
         | sort -u \
         | xargs -rt apt-mark manual; \
@@ -112,13 +114,18 @@ RUN { \
     } > "${PHP_INI_DIR}/conf.d/nextcloud.ini"; \
     \
     mkdir /var/www/data; \
+    mkdir -p /docker-entrypoint-hooks.d/pre-installation \
+             /docker-entrypoint-hooks.d/post-installation \
+             /docker-entrypoint-hooks.d/pre-upgrade \
+             /docker-entrypoint-hooks.d/post-upgrade \
+             /docker-entrypoint-hooks.d/before-starting; \
     chown -R www-data:root /var/www; \
     chmod -R g=u /var/www
 
 VOLUME /var/www/html
 
 
-ENV NEXTCLOUD_VERSION 26.0.0
+ENV NEXTCLOUD_VERSION 26.0.13
 
 RUN set -ex; \
     fetchDeps=" \
@@ -128,10 +135,8 @@ RUN set -ex; \
     apt-get update; \
     apt-get install -y --no-install-recommends $fetchDeps; \
     \
-    curl -fsSL -o nextcloud.tar.bz2 \
-        "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2"; \
-    curl -fsSL -o nextcloud.tar.bz2.asc \
-        "https://download.nextcloud.com/server/releases/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc"; \
+    curl -fsSL -o nextcloud.tar.bz2 "https://download.nextcloud.com/server/releases/nextcloud-26.0.13.tar.bz2"; \
+    curl -fsSL -o nextcloud.tar.bz2.asc "https://download.nextcloud.com/server/releases/nextcloud-26.0.13.tar.bz2.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
 # gpg key from https://nextcloud.com/nextcloud.asc
     gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 28806A878AE423A28372792ED75899B9A724937A; \
