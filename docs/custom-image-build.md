@@ -27,8 +27,9 @@ practice while keeping a conservative stable runtime.
 
 Do not construct, run, publish, or verify image artifacts from a developer
 checkout, and do not execute the CI helper scripts there. Work outside GitLab
-CI is limited to source review and static formatting/syntax checks of
-`34/fpm/Dockerfile`.
+CI is limited to source review and static formatting/syntax checks, such as
+shell syntax checks or whitespace checks. Docker image construction and smoke
+testing belong only in GitLab CI.
 
 ## GitLab CI/CD
 
@@ -41,30 +42,81 @@ GitLab CI/CD secret variables:
 
 Do not commit Docker Hub credentials or runtime Nextcloud secrets.
 
-The pipeline verifies the release checksum and PGP signature, constructs the FPM
-image, runs smoke tests, logs in to Docker Hub, pushes all tags, verifies the
-pushed digests, and writes `artifacts/nextcloud-image-manifest.yaml`.
+Pipelines are manual-only. A Git push, merge request event, schedule, API call,
+or parent pipeline must not create a pipeline. Start validation or publishing
+from GitLab's UI:
+
+1. Open `hn583/nextcloud_docker`.
+2. Go to `Build > Pipelines > Run pipeline`.
+3. Select the branch or tag with GitLab's built-in ref dropdown.
+4. Set trigger-time variables.
+5. Start the pipeline.
+
+The selected GitLab ref is the source of truth. Do not use a separate
+script-level branch checkout or a `BRANCH_TO_USE` variable for normal
+operation.
+
+Trigger-time variables:
+
+- `PUBLISH_IMAGE`
+  - Default: `false`
+  - Set to `true` only when Docker Hub publishing is approved for this run.
+- `IMAGE_TAG`
+  - Default: `34.0.0`
+  - Plain Docker Hub release tag used only when publishing.
+- `PUBLISH_IMMUTABLE_TAGS`
+  - Default: `true`
+  - When `true`, also publishes trace tags with the pipeline ID and commit SHA.
+
+With `PUBLISH_IMAGE=false`, CI verifies the release checksum and PGP signature,
+constructs the image, runs smoke tests, and writes the validation artifact
+`artifacts/nextcloud-image-validation.yaml`. It does not require Docker Hub
+credentials, log in to Docker Hub, push tags, or write a production deployment
+manifest.
+
+With `PUBLISH_IMAGE=true`, CI performs the same validation first. Only after
+validation passes, the gated publish job requires Docker Hub credentials, pushes
+approved tags, verifies that pushed tags resolve to the same digest, and writes
+`artifacts/nextcloud-image-manifest.yaml` with the real Docker Hub digest.
 
 Published tags:
 
 - `rusman/nextcloud_cron_fmp:34.0.0`
-- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<git-sha>`
-- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>`
+- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<git-sha>` when
+  `PUBLISH_IMMUTABLE_TAGS=true`
+- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>` when
+  `PUBLISH_IMMUTABLE_TAGS=true`
 
 `latest` is intentionally not used as a deployment selector.
 
+The current CI targets a protected Docker-socket image-build runner with tag
+`homenas-docker-image-build`. The runner job container must have
+`/var/run/docker.sock` mounted so the Docker CLI in the job can use the host
+Docker daemon. The image layers and build cache are stored by the host Docker
+daemon, not inside the GitLab job container.
+
+The runner was created under the GitLab group path `homenas`. Confirm that the
+`hn583/nextcloud_docker` project can use that group runner, or move/enable the
+runner at the correct GitLab scope before starting a pipeline.
+
 ## Manifest
 
-CI publishes `artifacts/nextcloud-image-manifest.yaml` with the deployment
-handoff fields required by the Unraid pipeline:
+Validation-only runs publish `artifacts/nextcloud-image-validation.yaml` with
+`published: false` and `image_digest: null`. This file is not a production
+deployment manifest and must not be consumed by the Unraid deployment pipeline.
+
+Publishing runs publish `artifacts/nextcloud-image-manifest.yaml` with the
+deployment handoff fields required by the Unraid pipeline:
 
 ```yaml
+published: true
 image_repository: rusman/nextcloud_cron_fmp
 image_tag: "34.0.0"
 image_digest: "sha256:..."
 nextcloud_version: "34.0.0"
 source_project: "hn583/nextcloud_docker"
 source_commit: "..."
+source_ref: "..."
 dockerfile_path: "34/fpm/Dockerfile"
 release_url: "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2"
 release_signature_verified: true
@@ -101,7 +153,7 @@ Changed deliberately:
 
 ## Intermediate Major Upgrades
 
-This task prepares only the latest approved image target. Production migration
+This task prepares only the current approved image target. Production migration
 from the current 26.x server cannot jump directly to 34.x. Intermediate
 one-major images for 27.x through 33.x are still a prerequisite before
 production migration, or the pipeline must be extended later to produce each

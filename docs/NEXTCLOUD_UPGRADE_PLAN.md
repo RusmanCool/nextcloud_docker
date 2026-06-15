@@ -46,10 +46,11 @@ Scope:
   `config/`.
 - Build from a pinned Nextcloud release artifact or exact release tag.
 - Verify release checksum and PGP signature before building.
-- Push with the historical repository name:
+- Publish through the gated GitLab CI publish job using the historical
+  repository name:
 
 ```text
-docker push rusman/nextcloud_cron_fmp:<tagname>
+rusman/nextcloud_cron_fmp:<tagname>
 ```
 
 - Publish an image manifest containing repository, tag, digest, Nextcloud
@@ -300,10 +301,11 @@ Existing tag compatibility rule:
 
 - Keep the historical plain version tag pattern available when intentionally
   replacing a production target, for example `rusman/nextcloud_cron_fmp:34.0.0`.
-- The push command shape is:
+- The gated GitLab CI publish job publishes the approved Docker Hub tags using
+  this image reference shape:
 
 ```text
-docker push rusman/nextcloud_cron_fmp:<tagname>
+rusman/nextcloud_cron_fmp:<tagname>
 ```
 
 - For CI traceability, also publish a build-specific tag and record its digest.
