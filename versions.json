@@ -102,5 +102,21 @@
         "phpVersion": "8.2"
       }
     }
+  },
+  "34": {
+    "branch": "34",
+    "version": "34.0.0",
+    "url": "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2",
+    "ascUrl": "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2.asc",
+    "sha256Url": "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2.sha256",
+    "variants": {
+      "fpm": {
+        "variant": "fpm",
+        "base": "debian",
+        "baseVersion": "trixie",
+        "phpVersion": "8.4",
+        "dockerfile": "34/fpm/Dockerfile"
+      }
+    }
   }
 }
