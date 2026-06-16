@@ -115,6 +115,9 @@ Stages:
 - Verify checksum.
 - Verify PGP signature and expected fingerprint.
 - Publish only verification artifacts and dotenv values needed by later jobs.
+- Upload trusted verification artifacts only on successful job completion, so a
+  failed checkout or script cannot publish stale files from a reused runner
+  workspace.
 
 `build_smoke`:
 
@@ -132,6 +135,8 @@ Stages:
 - Push the plain release tag and any enabled immutable tags.
 - Verify that all pushed tags resolve to the same digest.
 - Fail if digest verification fails.
+- Upload trusted build, digest, and manifest artifacts only on successful job
+  completion.
 
 `manifest`:
 
