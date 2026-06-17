@@ -65,7 +65,8 @@ static_syntax:
     - apk add --no-cache bash
   script:
     - bash -n ci/*.sh
-    - sh -n 34/fpm/*.sh
+    - test -f "$DOCKERFILE_PATH"
+    - sh -n "$DOCKER_CONTEXT"/*.sh
 
 verify_release:
   stage: verify_release

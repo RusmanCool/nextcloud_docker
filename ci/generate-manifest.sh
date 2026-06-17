@@ -31,6 +31,18 @@ source_project="${SOURCE_PROJECT:-${CI_PROJECT_PATH:-hn583/nextcloud_docker}}"
 source_commit="${SOURCE_COMMIT:-${CI_COMMIT_SHA:-unknown}}"
 source_ref="${SOURCE_REF:-${CI_COMMIT_REF_NAME:-unknown}}"
 dockerfile_path="${DOCKERFILE_PATH:-34/fpm/Dockerfile}"
+image_base="${IMAGE_BASE:-}"
+if [ -z "$image_base" ] && [ -f "$dockerfile_path" ]; then
+    image_base="$(awk '$1 == "FROM" { print $2; exit }' "$dockerfile_path")"
+fi
+image_base="${image_base:-unknown}"
+php_version="${PHP_VERSION:-}"
+if [ -z "$php_version" ]; then
+    case "$image_base" in
+        php:*) php_version="${image_base#php:}"; php_version="${php_version%%-*}" ;;
+        *) php_version="unknown" ;;
+    esac
+fi
 release_url="${RELEASE_URL:-https://download.nextcloud.com/server/releases/nextcloud-${nextcloud_version}.tar.bz2}"
 release_signature_verified="${RELEASE_SIGNATURE_VERIFIED:-false}"
 release_checksum_verified="${RELEASE_CHECKSUM_VERIFIED:-false}"
@@ -96,8 +108,8 @@ immutable_image_tag: "$immutable_image_tag"
 pipeline_image_tag: "$pipeline_image_tag"
 release_sha256: "$release_sha256"
 release_gpg_fingerprint: "$release_gpg_fingerprint"
-base_image: "php:8.4-fpm-trixie"
-php_version: "8.4"
+base_image: "$image_base"
+php_version: "$php_version"
 fpm_runtime: true
 cron_compatible: true
 postgresql_supported: true
