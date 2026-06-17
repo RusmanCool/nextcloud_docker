@@ -234,8 +234,14 @@ manifest_validation:
     - set +a
     - |
       case "$DEPLOYMENT_ENV" in
-        qa) export MANIFEST_PATH=artifacts/nextcloud-image-qa-validation.yaml ;;
-        prod) export MANIFEST_PATH=artifacts/nextcloud-image-validation.yaml ;;
+        qa)
+          export MANIFEST_PATH=artifacts/nextcloud-image-qa-validation.yaml
+          export IMAGE_TAG="${QA_IMAGE_TAG:-${NEXTCLOUD_VERSION}-qa}"
+          ;;
+        prod)
+          export MANIFEST_PATH=artifacts/nextcloud-image-validation.yaml
+          export IMAGE_TAG="$NEXTCLOUD_VERSION"
+          ;;
         *) echo "DEPLOYMENT_ENV must be qa or prod." >&2; exit 1 ;;
       esac
     - export SOURCE_PROJECT="${CI_PROJECT_PATH:-hn583/nextcloud_docker}"
