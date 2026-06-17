@@ -205,6 +205,12 @@ publish_image:
         docker push "$IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
       fi
     - ./ci/verify-published-digest.sh
+    - |
+      cleanup_refs="$LOCAL_IMAGE_REF $IMAGE_REPOSITORY:$IMAGE_TAG"
+      if [ "$PUBLISH_IMMUTABLE_TAGS" = "true" ]; then
+        cleanup_refs="$cleanup_refs $IMAGE_REPOSITORY:$IMMUTABLE_IMAGE_TAG $IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
+      fi
+      docker image rm $cleanup_refs
   artifacts:
     when: on_success
     reports:
