@@ -4,9 +4,18 @@ set -euo pipefail
 image_repository="${IMAGE_REPOSITORY:?IMAGE_REPOSITORY is required}"
 plain_tag="${IMAGE_TAG:?IMAGE_TAG is required}"
 publish_immutable_tags="${PUBLISH_IMMUTABLE_TAGS:-true}"
+deployment_environment="${DEPLOYMENT_ENV:-prod}"
 artifact_dir="${ARTIFACT_DIR:-artifacts}"
 
 mkdir -p "$artifact_dir"
+
+case "$deployment_environment" in
+    qa|prod) ;;
+    *)
+        echo "DEPLOYMENT_ENV must be qa or prod" >&2
+        exit 1
+        ;;
+esac
 
 case "$publish_immutable_tags" in
     true|false) ;;
@@ -56,7 +65,9 @@ fi
 
 cat > "$artifact_dir/image.env" <<EOF
 IMAGE_DIGEST=$plain_digest
+IMAGE_TAG=$plain_tag
 IMAGE_REF=${image_repository}:${plain_tag}
+DEPLOYMENT_ENV=$deployment_environment
 IMMUTABLE_IMAGE_TAG=$immutable_tag
 PIPELINE_IMAGE_TAG=$pipeline_tag
 IMMUTABLE_IMAGE_DIGEST=$immutable_digest

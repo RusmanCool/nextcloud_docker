@@ -31,6 +31,15 @@ variables:
       - "true"
       - "false"
     description: "Also publish trace tags using pipeline ID and commit SHA."
+  DEPLOYMENT_ENV:
+    value: "qa"
+    options:
+      - "qa"
+      - "prod"
+    description: "Deployment lane for the published manifest and tag policy."
+  QA_IMAGE_TAG:
+    value: "34.0.0-qa"
+    description: "Mutable QA Docker tag. Used only when DEPLOYMENT_ENV=qa and publishing."
   DOCKER_BUILDKIT: "1"
   NEXTCLOUD_VERSION: "34.0.0"
   IMAGE_REPOSITORY: "rusman/nextcloud_cron_fmp"
@@ -72,6 +81,10 @@ verify_release:
     paths:
       - artifacts/release/release.env
       - artifacts/release/release-verification.yaml
+      - artifacts/release/nextcloud-*.tar.bz2
+      - artifacts/release/nextcloud-*.tar.bz2.asc
+      - artifacts/release/nextcloud-*.tar.bz2.sha256
+      - artifacts/release/nextcloud.asc
 
 build_smoke:
   extends: .docker_socket
@@ -82,8 +95,14 @@ build_smoke:
   script:
     - mkdir -p artifacts/build artifacts/image
     - touch artifacts/image/.keep
+    - rm -rf "$DOCKER_CONTEXT/release"
+    - mkdir -p "$DOCKER_CONTEXT/release"
+    - cp "artifacts/release/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2" "$DOCKER_CONTEXT/release/nextcloud.tar.bz2"
+    - cp "artifacts/release/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.asc" "$DOCKER_CONTEXT/release/nextcloud.tar.bz2.asc"
+    - cp "artifacts/release/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.sha256" "$DOCKER_CONTEXT/release/nextcloud.tar.bz2.sha256"
+    - cp artifacts/release/nextcloud.asc "$DOCKER_CONTEXT/release/nextcloud.asc"
     - export LOCAL_IMAGE_REF="nextcloud-ci:${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}"
-    - docker build --pull --build-arg NEXTCLOUD_SHA256="$NEXTCLOUD_SHA256" --build-arg NEXTCLOUD_DOWNLOAD_URL="$RELEASE_URL" --build-arg NEXTCLOUD_ASC_URL="$RELEASE_ASC_URL" --build-arg NEXTCLOUD_GPG_KEY_URL="$NEXTCLOUD_GPG_KEY_URL" --build-arg NEXTCLOUD_GPG_FINGERPRINT="$NEXTCLOUD_GPG_FINGERPRINT" --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" --label "org.opencontainers.image.version=$NEXTCLOUD_VERSION" -t "$LOCAL_IMAGE_REF" -f "$DOCKERFILE_PATH" "$DOCKER_CONTEXT"
+    - docker build --pull --build-arg NEXTCLOUD_SHA256="$NEXTCLOUD_SHA256" --build-arg NEXTCLOUD_GPG_FINGERPRINT="$NEXTCLOUD_GPG_FINGERPRINT" --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" --label "org.opencontainers.image.version=$NEXTCLOUD_VERSION" -t "$LOCAL_IMAGE_REF" -f "$DOCKERFILE_PATH" "$DOCKER_CONTEXT"
     - IMAGE_REF="$LOCAL_IMAGE_REF" ./ci/smoke-test.sh
     - |
       {
@@ -123,9 +142,10 @@ publish_image:
     - test -n "${DOCKERHUB_USERNAME:-}" || { echo "DOCKERHUB_USERNAME is required for publishing." >&2; exit 1; }
     - test -n "${DOCKERHUB_TOKEN:-}" || { echo "DOCKERHUB_TOKEN is required for publishing." >&2; exit 1; }
     - |
-      case "$IMAGE_TAG" in
-        ""|[Ll][Aa][Tt][Ee][Ss][Tt]|*/*|*:*)
-          echo "IMAGE_TAG must be a plain non-latest Docker tag." >&2
+      case "$DEPLOYMENT_ENV" in
+        qa|prod) ;;
+        *)
+          echo "DEPLOYMENT_ENV must be qa or prod." >&2
           exit 1
           ;;
       esac
@@ -137,7 +157,31 @@ publish_image:
           exit 1
           ;;
       esac
-    - test "$IMAGE_TAG" = "$NEXTCLOUD_VERSION" || { echo "IMAGE_TAG must match NEXTCLOUD_VERSION for release publishing." >&2; exit 1; }
+    - |
+      validate_plain_tag() {
+        case "$1" in
+          ""|[Ll][Aa][Tt][Ee][Ss][Tt]|*/*|*:*)
+            echo "Image tags must be plain non-latest Docker tags." >&2
+            exit 1
+            ;;
+        esac
+      }
+
+      if [ "$DEPLOYMENT_ENV" = "prod" ]; then
+        validate_plain_tag "$IMAGE_TAG"
+        test "$IMAGE_TAG" = "$NEXTCLOUD_VERSION" || { echo "PROD IMAGE_TAG must match NEXTCLOUD_VERSION for release publishing." >&2; exit 1; }
+      else
+        export IMAGE_TAG="${QA_IMAGE_TAG:-${NEXTCLOUD_VERSION}-qa}"
+        validate_plain_tag "$IMAGE_TAG"
+        test "$IMAGE_TAG" != "$NEXTCLOUD_VERSION" || { echo "QA_IMAGE_TAG must not equal the PROD release tag." >&2; exit 1; }
+        case "$IMAGE_TAG" in
+          *[Qq][Aa]*) ;;
+          *)
+            echo "QA_IMAGE_TAG must clearly identify QA." >&2
+            exit 1
+            ;;
+        esac
+      fi
     - test -s "$BUILD_IMAGE_ARCHIVE" || { echo "Build image archive is missing; cannot publish the smoke-tested image." >&2; exit 1; }
     - docker load -i "$BUILD_IMAGE_ARCHIVE"
     - export IMMUTABLE_IMAGE_TAG=""
@@ -184,7 +228,16 @@ manifest_validation:
     - apk add --no-cache bash coreutils
   script:
     - export MANIFEST_TYPE=validation
-    - export MANIFEST_PATH=artifacts/nextcloud-image-validation.yaml
+    - set -a
+    - . artifacts/release/release.env
+    - . artifacts/build/build.env
+    - set +a
+    - |
+      case "$DEPLOYMENT_ENV" in
+        qa) export MANIFEST_PATH=artifacts/nextcloud-image-qa-validation.yaml ;;
+        prod) export MANIFEST_PATH=artifacts/nextcloud-image-validation.yaml ;;
+        *) echo "DEPLOYMENT_ENV must be qa or prod." >&2; exit 1 ;;
+      esac
     - export SOURCE_PROJECT="${CI_PROJECT_PATH:-hn583/nextcloud_docker}"
     - export SOURCE_COMMIT="$CI_COMMIT_SHA"
     - export SOURCE_REF="$CI_COMMIT_REF_NAME"
@@ -192,7 +245,7 @@ manifest_validation:
   artifacts:
     when: on_success
     paths:
-      - artifacts/nextcloud-image-validation.yaml
+      - artifacts/nextcloud-image*.yaml
 
 manifest_published:
   stage: manifest
@@ -211,8 +264,18 @@ manifest_published:
   before_script:
     - apk add --no-cache bash coreutils
   script:
-    - export MANIFEST_TYPE=production
-    - export MANIFEST_PATH=artifacts/nextcloud-image-manifest.yaml
+    - export MANIFEST_TYPE=published
+    - set -a
+    - . artifacts/release/release.env
+    - . artifacts/build/build.env
+    - . artifacts/image.env
+    - set +a
+    - |
+      case "$DEPLOYMENT_ENV" in
+        qa) export MANIFEST_PATH=artifacts/nextcloud-image-qa-manifest.yaml ;;
+        prod) export MANIFEST_PATH=artifacts/nextcloud-image-manifest.yaml ;;
+        *) echo "DEPLOYMENT_ENV must be qa or prod." >&2; exit 1 ;;
+      esac
     - export SOURCE_PROJECT="${CI_PROJECT_PATH:-hn583/nextcloud_docker}"
     - export SOURCE_COMMIT="$CI_COMMIT_SHA"
     - export SOURCE_REF="$CI_COMMIT_REF_NAME"
@@ -220,4 +283,4 @@ manifest_published:
   artifacts:
     when: on_success
     paths:
-      - artifacts/nextcloud-image-manifest.yaml
+      - artifacts/nextcloud-image*.yaml

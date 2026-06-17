@@ -86,6 +86,13 @@ Required parameters:
   - Options: `true`, `false`
   - Meaning: controls creation of traceable tags such as
     `34.0.0-houselab.<pipeline-id>` and `34.0.0-houselab.<git-sha>`.
+- `DEPLOYMENT_ENV`
+  - Default: `qa`
+  - Options: `qa`, `prod`
+  - Meaning: controls whether published tags and manifests are for QA or PROD.
+- `QA_IMAGE_TAG`
+  - Default: `34.0.0-qa`
+  - Meaning: mutable QA tag used only when `DEPLOYMENT_ENV=qa`.
 
 Branch selection should use GitLab's built-in branch/tag dropdown on the Run
 Pipeline page. A separate `BRANCH_TO_USE` variable should be avoided unless
@@ -114,7 +121,8 @@ Stages:
   public signing key.
 - Verify checksum.
 - Verify PGP signature and expected fingerprint.
-- Publish only verification artifacts and dotenv values needed by later jobs.
+- Publish only verified release files, verification artifacts, and dotenv values
+  needed by later jobs.
 - Upload trusted verification artifacts only on successful job completion, so a
   failed checkout or script cannot publish stale files from a reused runner
   workspace.
@@ -122,6 +130,9 @@ Stages:
 `build_smoke`:
 
 - Construct the image inside GitLab CI only.
+- Use only the verified release artifacts from the `verify_release` job for
+  Nextcloud source code. The Docker build must not download the Nextcloud
+  release archive, checksum, signature, or signing key a second time.
 - Run image smoke tests inside GitLab CI only.
 - Save build metadata needed by later jobs.
 - Save a compressed image archive only when `PUBLISH_IMAGE=true`, so the publish
@@ -132,7 +143,7 @@ Stages:
 
 - Run only when `PUBLISH_IMAGE == "true"`.
 - Require Docker Hub secret variables to exist.
-- Push the plain release tag and any enabled immutable tags.
+- Push the QA tag or PROD release tag and any enabled immutable tags.
 - Verify that all pushed tags resolve to the same digest.
 - Fail if digest verification fails.
 - Upload trusted build, digest, and manifest artifacts only on successful job
@@ -142,8 +153,8 @@ Stages:
 
 - For non-publishing runs, publish a validation manifest or build report that
   clearly states no Docker Hub digest was produced.
-- For publishing runs, publish the deployment manifest containing the real
-  Docker Hub digest, selected ref, source commit, CI pipeline URL, release
+- For publishing runs, publish a QA or PROD deployment manifest containing the
+  real Docker Hub digest, selected ref, source commit, CI pipeline URL, release
   verification results, and smoke-test result.
 
 ## Publishing Safety Gates
@@ -185,6 +196,7 @@ All pushed tags for a single pipeline must resolve to the same digest.
 The production manifest is valid only after a publishing run. It must include:
 
 - `image_repository`
+- `deployment_environment`
 - `image_tag`
 - `image_digest`
 - `nextcloud_version`
@@ -208,8 +220,10 @@ published: false
 image_digest: null
 ```
 
-The downstream Unraid deployment pipeline must consume only a production
-manifest from a publishing run.
+The downstream Unraid deployment pipeline must consume only a matching manifest
+from a publishing run. QA manifests must be routed only to QA PostgreSQL, QA
+Redis, and QA volumes. PROD manifests must be routed only to production
+resources.
 
 ## Hardening Task Status
 

@@ -5,7 +5,8 @@ artifact_dir="${ARTIFACT_DIR:-artifacts}"
 manifest_type="${MANIFEST_TYPE:-production}"
 
 case "$manifest_type" in
-    production)
+    production|published)
+        manifest_type=published
         manifest_path="${MANIFEST_PATH:-${artifact_dir}/nextcloud-image-manifest.yaml}"
         published=true
         ;;
@@ -14,7 +15,7 @@ case "$manifest_type" in
         published=false
         ;;
     *)
-        echo "MANIFEST_TYPE must be production or validation" >&2
+        echo "MANIFEST_TYPE must be published, production, or validation" >&2
         exit 1
         ;;
 esac
@@ -24,6 +25,7 @@ image_tag="${IMAGE_TAG:-${NEXTCLOUD_VERSION:-34.0.0}}"
 image_digest="${IMAGE_DIGEST:-}"
 immutable_image_tag="${IMMUTABLE_IMAGE_TAG:-}"
 pipeline_image_tag="${PIPELINE_IMAGE_TAG:-}"
+deployment_environment="${DEPLOYMENT_ENV:-prod}"
 nextcloud_version="${NEXTCLOUD_VERSION:-34.0.0}"
 source_project="${SOURCE_PROJECT:-${CI_PROJECT_PATH:-hn583/nextcloud_docker}}"
 source_commit="${SOURCE_COMMIT:-${CI_COMMIT_SHA:-unknown}}"
@@ -41,17 +43,23 @@ publish_immutable_tags="${PUBLISH_IMMUTABLE_TAGS:-true}"
 
 mkdir -p "$artifact_dir"
 
-if [ "$manifest_type" = "production" ]; then
-    case "$image_digest" in
-        sha256:*) ;;
-        *)
-            echo "A production manifest requires a real sha256 Docker Hub digest" >&2
-            exit 1
-            ;;
-    esac
+case "$deployment_environment" in
+    qa|prod) ;;
+    *)
+        echo "DEPLOYMENT_ENV must be qa or prod" >&2
+        exit 1
+        ;;
+esac
+
+if [ "$manifest_type" = "published" ]; then
+    if ! [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
+        || [ "$image_digest" = "sha256:0000000000000000000000000000000000000000000000000000000000000000" ]; then
+        echo "A published manifest requires a real sha256 Docker Hub digest" >&2
+        exit 1
+    fi
 
     if [ "$release_signature_verified" != "true" ] || [ "$release_checksum_verified" != "true" ] || [ "$smoke_tests_passed" != "true" ]; then
-        echo "A production manifest requires verified release artifacts and passing smoke tests" >&2
+        echo "A published manifest requires verified release artifacts and passing smoke tests" >&2
         exit 1
     fi
 fi
@@ -68,6 +76,7 @@ fi
 
 cat > "$manifest_path" <<EOF
 published: $published
+deployment_environment: "$deployment_environment"
 image_repository: $image_repository
 image_tag: "$image_tag"
 image_digest: $image_digest_value
@@ -95,6 +104,8 @@ postgresql_supported: true
 redis_supported: true
 apcu_supported: true
 mysql_supported: false
+image_contains_runtime_data: false
+runtime_data_policy: "QA manifests must deploy only with QA PostgreSQL, QA Redis, and QA volumes. PROD manifests must deploy only with production resources."
 intermediate_upgrade_images_available: false
 notes: "Builds only the current approved image. Production migration from 26.x still requires one-major-at-a-time intermediate images."
 EOF

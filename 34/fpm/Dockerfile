@@ -4,10 +4,7 @@
 # daemons.
 FROM php:8.4-fpm-trixie
 
-ARG NEXTCLOUD_DOWNLOAD_URL="https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2"
-ARG NEXTCLOUD_ASC_URL="https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2.asc"
 ARG NEXTCLOUD_SHA256=""
-ARG NEXTCLOUD_GPG_KEY_URL="https://nextcloud.com/nextcloud.asc"
 ARG NEXTCLOUD_GPG_FINGERPRINT="28806A878AE423A28372792ED75899B9A724937A"
 
 # entrypoint.sh and cron.sh dependencies
@@ -120,6 +117,8 @@ VOLUME /var/www/html
 
 ENV NEXTCLOUD_VERSION=34.0.0
 
+COPY release/nextcloud.tar.bz2 release/nextcloud.tar.bz2.asc release/nextcloud.tar.bz2.sha256 release/nextcloud.asc /tmp/nextcloud-release/
+
 RUN set -ex; \
     fetchDeps=" \
         gnupg \
@@ -127,17 +126,14 @@ RUN set -ex; \
     "; \
     apt-get update; \
     apt-get install -y --no-install-recommends $fetchDeps; \
-    curl -fsSL -o nextcloud.tar.bz2 "$NEXTCLOUD_DOWNLOAD_URL"; \
-    curl -fsSL -o nextcloud.tar.bz2.asc "$NEXTCLOUD_ASC_URL"; \
+    cd /tmp/nextcloud-release; \
     if [ -n "$NEXTCLOUD_SHA256" ]; then \
         echo "$NEXTCLOUD_SHA256  nextcloud.tar.bz2" | sha256sum -c -; \
     else \
-        curl -fsSL -o nextcloud.tar.bz2.sha256 "${NEXTCLOUD_DOWNLOAD_URL}.sha256"; \
         checksum="$(awk '{ print $1; exit }' nextcloud.tar.bz2.sha256)"; \
         echo "$checksum  nextcloud.tar.bz2" | sha256sum -c -; \
     fi; \
     export GNUPGHOME="$(mktemp -d)"; \
-    curl -fsSL -o nextcloud.asc "$NEXTCLOUD_GPG_KEY_URL"; \
     gpg --batch --import nextcloud.asc; \
     gpg --batch --list-keys --with-colons "$NEXTCLOUD_GPG_FINGERPRINT" \
         | awk -F: -v fpr="$NEXTCLOUD_GPG_FINGERPRINT" '$1 == "fpr" && $10 == fpr { found=1 } END { exit !found }'; \
@@ -145,7 +141,8 @@ RUN set -ex; \
     tar -xjf nextcloud.tar.bz2 -C /usr/src/; \
     gpgconf --kill all; \
     rm -rf "$GNUPGHOME"; \
-    rm -f nextcloud.asc nextcloud.tar.bz2.asc nextcloud.tar.bz2 nextcloud.tar.bz2.sha256; \
+    cd /; \
+    rm -rf /tmp/nextcloud-release; \
     rm -rf /usr/src/nextcloud/updater; \
     mkdir -p /usr/src/nextcloud/data; \
     mkdir -p /usr/src/nextcloud/custom_apps; \

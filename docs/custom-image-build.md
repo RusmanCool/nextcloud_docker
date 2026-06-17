@@ -16,7 +16,9 @@ Official source evidence checked on 2026-06-15:
 - The release archive is
   `https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2`.
 - The release checksum and PGP signature are verified by GitLab CI before image
-  construction and again inside the CI image construction step.
+  construction. The verified release files are passed as CI artifacts into the
+  Docker build context and are checked again inside the image build without
+  downloading the Nextcloud release a second time.
 
 The runtime base is `php:8.4-fpm-trixie`. Nextcloud latest documentation lists
 PHP 8.2, 8.3, 8.4, and 8.5 as supported for the current release, with 8.2
@@ -67,24 +69,37 @@ Trigger-time variables:
 - `PUBLISH_IMMUTABLE_TAGS`
   - Default: `true`
   - When `true`, also publishes trace tags with the pipeline ID and commit SHA.
+- `DEPLOYMENT_ENV`
+  - Default: `qa`
+  - Options: `qa`, `prod`
+  - Controls QA vs PROD tag and manifest naming.
+- `QA_IMAGE_TAG`
+  - Default: `34.0.0-qa`
+  - Mutable QA tag used only when `DEPLOYMENT_ENV=qa` and publishing.
 
 With `PUBLISH_IMAGE=false`, CI verifies the release checksum and PGP signature,
-constructs the image, runs smoke tests, and writes the validation artifact
+passes the verified release artifacts into the Docker build context, constructs
+the image, runs smoke tests, and writes a validation artifact. For QA this is
+`artifacts/nextcloud-image-qa-validation.yaml`; for PROD this is
 `artifacts/nextcloud-image-validation.yaml`. It does not require Docker Hub
-credentials, log in to Docker Hub, push tags, or write a production deployment
-manifest.
+credentials, log in to Docker Hub, push tags, or write a deployment manifest.
 
 With `PUBLISH_IMAGE=true`, CI performs the same validation first. Only after
 validation passes, the gated publish job requires Docker Hub credentials, pushes
 approved tags, verifies that pushed tags resolve to the same digest, and writes
-`artifacts/nextcloud-image-manifest.yaml` with the real Docker Hub digest.
+a manifest with the real Docker Hub digest.
 
 Published tags:
 
-- `rusman/nextcloud_cron_fmp:34.0.0`
-- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<git-sha>` when
+- QA: `rusman/nextcloud_cron_fmp:34.0.0-qa`
+- QA immutable tags:
+  `rusman/nextcloud_cron_fmp:34.0.0-qa-houselab.<git-sha>` and
+  `rusman/nextcloud_cron_fmp:34.0.0-qa-houselab.<pipeline-id>` when
   `PUBLISH_IMMUTABLE_TAGS=true`
-- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>` when
+- PROD: `rusman/nextcloud_cron_fmp:34.0.0`
+- PROD immutable tags:
+  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<git-sha>` and
+  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>` when
   `PUBLISH_IMMUTABLE_TAGS=true`
 
 `latest` is intentionally not used as a deployment selector.
@@ -101,15 +116,21 @@ runner at the correct GitLab scope before starting a pipeline.
 
 ## Manifest
 
-Validation-only runs publish `artifacts/nextcloud-image-validation.yaml` with
-`published: false` and `image_digest: null`. This file is not a production
-deployment manifest and must not be consumed by the Unraid deployment pipeline.
+Validation-only runs publish a validation artifact with `published: false` and
+`image_digest: null`. This file is not a deployment manifest and must not be
+consumed by the Unraid deployment pipeline.
 
-Publishing runs publish `artifacts/nextcloud-image-manifest.yaml` with the
-deployment handoff fields required by the Unraid pipeline:
+QA publishing runs publish `artifacts/nextcloud-image-qa-manifest.yaml`. This
+manifest may only be consumed by a QA deployment that uses QA PostgreSQL, QA
+Redis, and QA volumes. It must not be allowed to connect to production
+Nextcloud volumes, production PostgreSQL, or production Redis.
+
+PROD publishing runs publish `artifacts/nextcloud-image-manifest.yaml` with the
+deployment handoff fields required by the production Unraid pipeline:
 
 ```yaml
 published: true
+deployment_environment: "prod"
 image_repository: rusman/nextcloud_cron_fmp
 image_tag: "34.0.0"
 image_digest: "sha256:..."
@@ -124,6 +145,7 @@ release_checksum_verified: true
 smoke_tests_passed: true
 published_at: "..."
 ci_pipeline_url: "..."
+image_contains_runtime_data: false
 ```
 
 ## Customization Notes Compared With 26.0.13

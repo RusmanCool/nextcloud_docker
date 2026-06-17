@@ -11,6 +11,19 @@ docker run --rm --entrypoint sh \
 php -v
 php -m
 
+require_module() {
+    module="$1"
+    pattern="^${module}$"
+    if [ "$module" = "opcache" ]; then
+        pattern="^Zend OPcache$|^opcache$"
+    fi
+
+    if ! php -m | grep -Eiq "$pattern"; then
+        echo "Required PHP module is missing: $module" >&2
+        exit 1
+    fi
+}
+
 for module in \
     apcu \
     bcmath \
@@ -28,26 +41,63 @@ for module in \
     sysvsem \
     zip
 do
-    if [ "$module" = "opcache" ]; then
-        php -m | grep -Eiq "^Zend OPcache$|^opcache$"
-    else
-        php -m | grep -Eiq "^${module}$"
+    require_module "$module"
+done
+
+for forbidden_module in \
+    mysqli \
+    pdo_mysql
+do
+    if php -m | grep -Eiq "^${forbidden_module}$"; then
+        echo "${forbidden_module} is intentionally not part of this PostgreSQL-only image" >&2
+        exit 1
     fi
 done
 
-if php -m | grep -Eiq "^pdo_mysql$"; then
-    echo "pdo_mysql is intentionally not part of this PostgreSQL-only image" >&2
+for forbidden_command in \
+    mariadbd \
+    mysql \
+    mysqld \
+    pg_ctl \
+    postgres \
+    postmaster \
+    redis-server
+do
+    if command -v "$forbidden_command" >/dev/null 2>&1; then
+        echo "${forbidden_command} must not be bundled in this Nextcloud application image" >&2
+        exit 1
+    fi
+done
+
+if ! test -f /usr/src/nextcloud/version.php; then
+    echo "Missing /usr/src/nextcloud/version.php" >&2
     exit 1
 fi
 
-test -f /usr/src/nextcloud/version.php
-actual_version="$(php -r '\''require "/usr/src/nextcloud/version.php"; echo implode(".", $OC_Version);'\'')"
-test "$actual_version" = "$EXPECTED_NEXTCLOUD_VERSION"
+actual_version="$(php -r "require '\''/usr/src/nextcloud/version.php'\''; echo \$OC_VersionString;")"
+actual_internal_version="$(php -r "require '\''/usr/src/nextcloud/version.php'\''; echo implode('\''.'\'', \$OC_Version);")"
+echo "Nextcloud release version: ${actual_version}; internal version: ${actual_internal_version}; expected release: ${EXPECTED_NEXTCLOUD_VERSION}"
+if [ "$actual_version" != "$EXPECTED_NEXTCLOUD_VERSION" ]; then
+    echo "Nextcloud release version mismatch: expected ${EXPECTED_NEXTCLOUD_VERSION}, got ${actual_version}" >&2
+    exit 1
+fi
 
 find /usr/src/nextcloud/config -maxdepth 1 -name "*.php" -print -exec php -l {} \;
 
-test -x /entrypoint.sh
-test -x /cron.sh
-test -f /var/spool/cron/crontabs/www-data
-grep -q "cron.php" /var/spool/cron/crontabs/www-data
+if ! test -x /entrypoint.sh; then
+    echo "Missing executable /entrypoint.sh" >&2
+    exit 1
+fi
+if ! test -x /cron.sh; then
+    echo "Missing executable /cron.sh" >&2
+    exit 1
+fi
+if ! test -f /var/spool/cron/crontabs/www-data; then
+    echo "Missing www-data crontab" >&2
+    exit 1
+fi
+if ! grep -q "cron.php" /var/spool/cron/crontabs/www-data; then
+    echo "www-data crontab does not run cron.php" >&2
+    exit 1
+fi
 '
