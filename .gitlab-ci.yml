@@ -179,10 +179,18 @@ publish_image:
           *)
             echo "QA_IMAGE_TAG must clearly identify QA." >&2
             exit 1
-            ;;
+          ;;
         esac
       fi
+      echo "Publish configuration:"
+      echo "  deployment_environment=$DEPLOYMENT_ENV"
+      echo "  image_repository=$IMAGE_REPOSITORY"
+      echo "  image_tag=$IMAGE_TAG"
+      echo "  nextcloud_version=$NEXTCLOUD_VERSION"
+      echo "  publish_immutable_tags=$PUBLISH_IMMUTABLE_TAGS"
+      echo "  build_image_archive=$BUILD_IMAGE_ARCHIVE"
     - test -s "$BUILD_IMAGE_ARCHIVE" || { echo "Build image archive is missing; cannot publish the smoke-tested image." >&2; exit 1; }
+    - echo "Loading smoke-tested image archive from $BUILD_IMAGE_ARCHIVE"
     - docker load -i "$BUILD_IMAGE_ARCHIVE"
     - export IMMUTABLE_IMAGE_TAG=""
     - export PIPELINE_IMAGE_TAG=""
@@ -191,25 +199,37 @@ publish_image:
         export IMMUTABLE_IMAGE_TAG="${IMAGE_TAG}-houselab.${CI_COMMIT_SHORT_SHA}"
         export PIPELINE_IMAGE_TAG="${IMAGE_TAG}-houselab.${CI_PIPELINE_ID}"
       fi
+      echo "Docker tags to publish:"
+      echo "  $IMAGE_REPOSITORY:$IMAGE_TAG"
+      if [ "$PUBLISH_IMMUTABLE_TAGS" = "true" ]; then
+        echo "  $IMAGE_REPOSITORY:$IMMUTABLE_IMAGE_TAG"
+        echo "  $IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
+      fi
     - docker tag "$LOCAL_IMAGE_REF" "$IMAGE_REPOSITORY:$IMAGE_TAG"
     - |
       if [ "$PUBLISH_IMMUTABLE_TAGS" = "true" ]; then
         docker tag "$LOCAL_IMAGE_REF" "$IMAGE_REPOSITORY:$IMMUTABLE_IMAGE_TAG"
         docker tag "$LOCAL_IMAGE_REF" "$IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
       fi
+    - echo "Logging in to Docker Hub as $DOCKERHUB_USERNAME"
     - printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - echo "Pushing $IMAGE_REPOSITORY:$IMAGE_TAG"
     - docker push "$IMAGE_REPOSITORY:$IMAGE_TAG"
     - |
       if [ "$PUBLISH_IMMUTABLE_TAGS" = "true" ]; then
+        echo "Pushing $IMAGE_REPOSITORY:$IMMUTABLE_IMAGE_TAG"
         docker push "$IMAGE_REPOSITORY:$IMMUTABLE_IMAGE_TAG"
+        echo "Pushing $IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
         docker push "$IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
       fi
+    - echo "Verifying published Docker Hub digests"
     - ./ci/verify-published-digest.sh
     - |
       cleanup_refs="$LOCAL_IMAGE_REF $IMAGE_REPOSITORY:$IMAGE_TAG"
       if [ "$PUBLISH_IMMUTABLE_TAGS" = "true" ]; then
         cleanup_refs="$cleanup_refs $IMAGE_REPOSITORY:$IMMUTABLE_IMAGE_TAG $IMAGE_REPOSITORY:$PIPELINE_IMAGE_TAG"
       fi
+      echo "Removing local image refs after verified publish: $cleanup_refs"
       docker image rm $cleanup_refs
   artifacts:
     when: on_success
