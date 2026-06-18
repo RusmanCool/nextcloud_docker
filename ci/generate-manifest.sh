@@ -23,9 +23,6 @@ esac
 image_repository="${IMAGE_REPOSITORY:-rusman/nextcloud_cron_fmp}"
 image_tag="${IMAGE_TAG:-${NEXTCLOUD_VERSION:-34.0.0}}"
 image_digest="${IMAGE_DIGEST:-}"
-immutable_image_tag="${IMMUTABLE_IMAGE_TAG:-}"
-pipeline_image_tag="${PIPELINE_IMAGE_TAG:-}"
-deployment_environment="${DEPLOYMENT_ENV:-prod}"
 nextcloud_version="${NEXTCLOUD_VERSION:-34.0.0}"
 source_project="${SOURCE_PROJECT:-${CI_PROJECT_PATH:-hn583/nextcloud_docker}}"
 source_commit="${SOURCE_COMMIT:-${CI_COMMIT_SHA:-unknown}}"
@@ -51,17 +48,8 @@ published_at="${PUBLISHED_AT:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 ci_pipeline_url="${CI_PIPELINE_URL:-}"
 release_sha256="${NEXTCLOUD_SHA256:-}"
 release_gpg_fingerprint="${NEXTCLOUD_GPG_FINGERPRINT:-28806A878AE423A28372792ED75899B9A724937A}"
-publish_immutable_tags="${PUBLISH_IMMUTABLE_TAGS:-true}"
 
 mkdir -p "$artifact_dir"
-
-case "$deployment_environment" in
-    qa|prod) ;;
-    *)
-        echo "DEPLOYMENT_ENV must be qa or prod" >&2
-        exit 1
-        ;;
-esac
 
 if [ "$manifest_type" = "published" ]; then
     if ! [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] \
@@ -79,19 +67,20 @@ fi
 if [ "$manifest_type" = "validation" ]; then
     image_digest_value="null"
     published_at_value="null"
-    immutable_tags_published=false
+    image_pull_by_digest_value="null"
 else
     image_digest_value="\"$image_digest\""
     published_at_value="\"$published_at\""
-    immutable_tags_published="$publish_immutable_tags"
+    image_pull_by_digest_value="\"${image_repository}@${image_digest}\""
 fi
 
 cat > "$manifest_path" <<EOF
 published: $published
-deployment_environment: "$deployment_environment"
+artifact_scope: "environment-neutral"
 image_repository: $image_repository
 image_tag: "$image_tag"
 image_digest: $image_digest_value
+image_pull_by_digest: $image_pull_by_digest_value
 nextcloud_version: "$nextcloud_version"
 source_project: "$source_project"
 source_commit: "$source_commit"
@@ -103,9 +92,6 @@ release_checksum_verified: $release_checksum_verified
 smoke_tests_passed: $smoke_tests_passed
 published_at: $published_at_value
 ci_pipeline_url: "$ci_pipeline_url"
-immutable_tags_published: $immutable_tags_published
-immutable_image_tag: "$immutable_image_tag"
-pipeline_image_tag: "$pipeline_image_tag"
 release_sha256: "$release_sha256"
 release_gpg_fingerprint: "$release_gpg_fingerprint"
 base_image: "$image_base"
@@ -117,7 +103,7 @@ redis_supported: true
 apcu_supported: true
 mysql_supported: false
 image_contains_runtime_data: false
-runtime_data_policy: "QA manifests must deploy only with QA PostgreSQL, QA Redis, and QA volumes. PROD manifests must deploy only with production resources."
+runtime_data_policy: "This image artifact is environment-neutral. QA and PROD separation belongs to deployment IaC, including volumes, PostgreSQL, Redis, hostnames, and secrets."
 intermediate_upgrade_images_available: false
-notes: "Builds only the current approved image. Production migration from 26.x still requires one-major-at-a-time intermediate images."
+notes: "Promote the same published digest through QA and PROD. Do not rebuild between environments."
 EOF

@@ -78,21 +78,9 @@ Required parameters:
   - Options: `false`, `true`
   - Meaning: when `false`, the pipeline may verify, construct, and smoke-test
     the image, but must not log in to Docker Hub or push tags.
-- `IMAGE_TAG`
-  - Default: the selected Nextcloud version, for example `34.0.0`
-  - Meaning: plain release tag to publish only when `PUBLISH_IMAGE=true`.
-- `PUBLISH_IMMUTABLE_TAGS`
-  - Default: `true`
-  - Options: `true`, `false`
-  - Meaning: controls creation of traceable tags such as
-    `34.0.0-houselab.<pipeline-id>` and `34.0.0-houselab.<git-sha>`.
-- `DEPLOYMENT_ENV`
-  - Default: `qa`
-  - Options: `qa`, `prod`
-  - Meaning: controls whether published tags and manifests are for QA or PROD.
-- `QA_IMAGE_TAG`
-  - Default: `34.0.0-qa`
-  - Meaning: mutable QA tag used only when `DEPLOYMENT_ENV=qa`.
+The published image tag is not operator-selected. When `PUBLISH_IMAGE=true`,
+the pipeline publishes exactly one environment-neutral artifact tag:
+`<NEXTCLOUD_VERSION>-houselab.<CI_PIPELINE_ID>`.
 
 Branch selection should use GitLab's built-in branch/tag dropdown on the Run
 Pipeline page. A separate `BRANCH_TO_USE` variable should be avoided unless
@@ -143,8 +131,8 @@ Stages:
 
 - Run only when `PUBLISH_IMAGE == "true"`.
 - Require Docker Hub secret variables to exist.
-- Push the QA tag or PROD release tag and any enabled immutable tags.
-- Verify that all pushed tags resolve to the same digest.
+- Push exactly one environment-neutral build artifact tag.
+- Verify that the pushed tag resolves to a real digest.
 - Fail if digest verification fails.
 - Upload trusted build, digest, and manifest artifacts only on successful job
   completion.
@@ -153,9 +141,9 @@ Stages:
 
 - For non-publishing runs, publish a validation manifest or build report that
   clearly states no Docker Hub digest was produced.
-- For publishing runs, publish a QA or PROD deployment manifest containing the
-  real Docker Hub digest, selected ref, source commit, CI pipeline URL, release
-  verification results, and smoke-test result.
+- For publishing runs, publish an environment-neutral artifact manifest
+  containing the real Docker Hub digest, selected ref, source commit, CI
+  pipeline URL, release verification results, and smoke-test result.
 
 ## Publishing Safety Gates
 
@@ -172,8 +160,8 @@ Publishing must require all of the following:
 - Successful Docker Hub push.
 - Successful pushed digest verification.
 
-If any gate fails, no deployment manifest with a production digest should be
-published.
+If any gate fails, no published artifact manifest with a Docker Hub digest
+should be produced.
 
 ## Docker Hub Tag Policy
 
@@ -181,24 +169,24 @@ Do not publish or consume `latest`.
 
 Required publish tags when `PUBLISH_IMAGE=true`:
 
-- Plain release tag, for example `rusman/nextcloud_cron_fmp:34.0.0`.
-- Pipeline trace tag, for example
-  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>`, when
-  `PUBLISH_IMMUTABLE_TAGS=true`.
-- Commit trace tag, for example
-  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<git-sha>`, when
-  `PUBLISH_IMMUTABLE_TAGS=true`.
+- One pipeline-scoped artifact tag, for example
+  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>`.
 
-All pushed tags for a single pipeline must resolve to the same digest.
+Downstream deployment should consume the manifest digest, for example
+`rusman/nextcloud_cron_fmp@sha256:...`, and promote that same digest through
+QA and PROD. QA/PROD separation belongs to deployment IaC and runtime
+configuration.
 
 ## Manifest Requirements
 
-The production manifest is valid only after a publishing run. It must include:
+The published artifact manifest is valid only after a publishing run. It must
+include:
 
 - `image_repository`
-- `deployment_environment`
+- `artifact_scope`
 - `image_tag`
 - `image_digest`
+- `image_pull_by_digest`
 - `nextcloud_version`
 - `source_project`
 - `source_commit`
@@ -210,7 +198,6 @@ The production manifest is valid only after a publishing run. It must include:
 - `smoke_tests_passed`
 - `published_at`
 - `ci_pipeline_url`
-- immutable tags produced by the run
 
 For non-publishing runs, use a separate validation artifact name or include an
 explicit field such as:

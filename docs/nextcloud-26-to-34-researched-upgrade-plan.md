@@ -286,37 +286,39 @@ Suggested PHP base by target major:
 | 33 | PHP 8.4 FPM Debian base |
 | 34 | Existing `php:8.4-fpm-trixie` is supported, even though 34 currently recommends PHP 8.5 |
 
-## QA Image Tags And Manifests
+## Image Artifact Tags And Manifests
 
 For each target major, run the GitLab UI pipeline with:
 
 ```text
 PUBLISH_IMAGE=true
-DEPLOYMENT_ENV=qa
-PUBLISH_IMMUTABLE_TAGS=true
-IMAGE_TAG=<version>
-QA_IMAGE_TAG=<version>-qa
 NEXTCLOUD_VERSION=<version>
 RELEASE_URL=https://download.nextcloud.com/server/releases/nextcloud-<version>.tar.bz2
 RELEASE_ASC_URL=https://download.nextcloud.com/server/releases/nextcloud-<version>.tar.bz2.asc
 RELEASE_SHA256_URL=https://download.nextcloud.com/server/releases/nextcloud-<version>.tar.bz2.sha256
+DOCKER_CONTEXT=<versioned-image-context>
+DOCKERFILE_PATH=<versioned-image-context>/Dockerfile
 ```
 
-Exact QA outputs:
+Each publishing pipeline produces exactly one environment-neutral image
+artifact tag and one published manifest:
 
-| Step | Mutable QA tag | Immutable QA tags | Manifest |
-| --- | --- | --- | --- |
-| 26 -> 27 | `rusman/nextcloud_cron_fmp:27.1.11-qa` | `27.1.11-qa-houselab.<commit-sha>`, `27.1.11-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 27 -> 28 | `rusman/nextcloud_cron_fmp:28.0.14-qa` | `28.0.14-qa-houselab.<commit-sha>`, `28.0.14-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 28 -> 29 | `rusman/nextcloud_cron_fmp:29.0.16-qa` | `29.0.16-qa-houselab.<commit-sha>`, `29.0.16-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 29 -> 30 | `rusman/nextcloud_cron_fmp:30.0.17-qa` | `30.0.17-qa-houselab.<commit-sha>`, `30.0.17-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 30 -> 31 | `rusman/nextcloud_cron_fmp:31.0.14-qa` | `31.0.14-qa-houselab.<commit-sha>`, `31.0.14-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 31 -> 32 | `rusman/nextcloud_cron_fmp:32.0.11-qa` | `32.0.11-qa-houselab.<commit-sha>`, `32.0.11-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 32 -> 33 | `rusman/nextcloud_cron_fmp:33.0.5-qa` | `33.0.5-qa-houselab.<commit-sha>`, `33.0.5-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
-| 33 -> 34 | `rusman/nextcloud_cron_fmp:34.0.0-qa` | `34.0.0-qa-houselab.<commit-sha>`, `34.0.0-qa-houselab.<pipeline-id>` | `artifacts/nextcloud-image-qa-manifest.yaml` |
+| Target | Published tag | Manifest |
+| --- | --- | --- |
+| 26.0.13 | `rusman/nextcloud_cron_fmp:26.0.13-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 27.1.11 | `rusman/nextcloud_cron_fmp:27.1.11-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 28.0.14 | `rusman/nextcloud_cron_fmp:28.0.14-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 29.0.16 | `rusman/nextcloud_cron_fmp:29.0.16-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 30.0.17 | `rusman/nextcloud_cron_fmp:30.0.17-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 31.0.14 | `rusman/nextcloud_cron_fmp:31.0.14-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 32.0.11 | `rusman/nextcloud_cron_fmp:32.0.11-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 33.0.5 | `rusman/nextcloud_cron_fmp:33.0.5-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+| 34.0.0 | `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
 
-QA must deploy by the QA manifest digest or immutable QA tag. QA manifests must
-not be accepted by production.
+QA and PROD must deploy the same published digest from the manifest. Do not
+rebuild or republish a different image between QA acceptance and PROD
+deployment. QA/PROD separation belongs to the deployment/IaC repository:
+volumes, PostgreSQL, Redis, hostnames, secrets, and runtime config.
 
 ## QA Runtime Isolation
 
@@ -375,7 +377,7 @@ Repeat for every target in this order:
    behavior, PostgreSQL credentials, and Redis dbindex/prefix.
 3. Confirm QA Compose/Ansible contains no `/mnt/user/appdata/nextcloud/...`
    production mounts.
-4. Deploy the target QA image by QA manifest digest or immutable QA tag.
+4. Deploy the target image by the published manifest digest.
 5. Run or confirm the application upgrade:
 
    ```text
@@ -411,40 +413,16 @@ Repeat for every target in this order:
 10. Record disabled apps and operator decisions. Do not proceed to the next
     major until QA acceptance and background migrations are complete.
 
-## PROD Image Tags And Manifests
-
-For each approved production target, run the GitLab UI pipeline with:
-
-```text
-PUBLISH_IMAGE=true
-DEPLOYMENT_ENV=prod
-PUBLISH_IMMUTABLE_TAGS=true
-IMAGE_TAG=<version>
-NEXTCLOUD_VERSION=<version>
-```
-
-Exact production outputs:
-
-| Step | Mutable PROD tag | Immutable PROD tags | Manifest |
-| --- | --- | --- | --- |
-| 26 -> 27 | `rusman/nextcloud_cron_fmp:27.1.11` | `27.1.11-houselab.<commit-sha>`, `27.1.11-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 27 -> 28 | `rusman/nextcloud_cron_fmp:28.0.14` | `28.0.14-houselab.<commit-sha>`, `28.0.14-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 28 -> 29 | `rusman/nextcloud_cron_fmp:29.0.16` | `29.0.16-houselab.<commit-sha>`, `29.0.16-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 29 -> 30 | `rusman/nextcloud_cron_fmp:30.0.17` | `30.0.17-houselab.<commit-sha>`, `30.0.17-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 30 -> 31 | `rusman/nextcloud_cron_fmp:31.0.14` | `31.0.14-houselab.<commit-sha>`, `31.0.14-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 31 -> 32 | `rusman/nextcloud_cron_fmp:32.0.11` | `32.0.11-houselab.<commit-sha>`, `32.0.11-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 32 -> 33 | `rusman/nextcloud_cron_fmp:33.0.5` | `33.0.5-houselab.<commit-sha>`, `33.0.5-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-| 33 -> 34 | `rusman/nextcloud_cron_fmp:34.0.0` | `34.0.0-houselab.<commit-sha>`, `34.0.0-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
-
-PROD must consume only a manifest with:
+PROD must consume only the same manifest accepted by QA, with:
 
 ```yaml
-deployment_environment: "prod"
+artifact_scope: "environment-neutral"
 published: true
 image_digest: "sha256:..."
+image_pull_by_digest: "rusman/nextcloud_cron_fmp@sha256:..."
 ```
 
-PROD must not consume QA manifests, validation manifests, or `latest`.
+PROD must not consume validation manifests, mutable tags, or `latest`.
 
 ## PROD Runbook Per Major
 
@@ -478,8 +456,8 @@ Preflight gate:
    - Deployment config.
 5. Confirm a restore test passed using QA-only resources.
 6. Confirm the exact same major transition passed in isolated QA.
-7. Confirm the target PROD manifest is published, digest verified, and has
-   `deployment_environment: "prod"`.
+7. Confirm the target manifest is published, digest verified, and matches the
+   same digest accepted in QA.
 8. Confirm a maintenance window is approved.
 9. Disable or get operator approval for third-party apps that block the target
    release.

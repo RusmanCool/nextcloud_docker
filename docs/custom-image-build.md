@@ -63,46 +63,28 @@ Trigger-time variables:
 - `PUBLISH_IMAGE`
   - Default: `false`
   - Set to `true` only when Docker Hub publishing is approved for this run.
-- `IMAGE_TAG`
-  - Default: `34.0.0`
-  - Plain Docker Hub release tag used only when publishing.
-- `PUBLISH_IMMUTABLE_TAGS`
-  - Default: `true`
-  - When `true`, also publishes trace tags with the pipeline ID and commit SHA.
-- `DEPLOYMENT_ENV`
-  - Default: `qa`
-  - Options: `qa`, `prod`
-  - Controls QA vs PROD tag and manifest naming.
-- `QA_IMAGE_TAG`
-  - Default: `34.0.0-qa`
-  - Mutable QA tag used only when `DEPLOYMENT_ENV=qa` and publishing.
 
 With `PUBLISH_IMAGE=false`, CI verifies the release checksum and PGP signature,
 passes the verified release artifacts into the Docker build context, constructs
-the image, runs smoke tests, and writes a validation artifact. For QA this is
-`artifacts/nextcloud-image-qa-validation.yaml`; for PROD this is
+the image, runs smoke tests, and writes
 `artifacts/nextcloud-image-validation.yaml`. It does not require Docker Hub
-credentials, log in to Docker Hub, push tags, or write a deployment manifest.
+credentials, log in to Docker Hub, push tags, or write a published deployment
+manifest.
 
 With `PUBLISH_IMAGE=true`, CI performs the same validation first. Only after
-validation passes, the gated publish job requires Docker Hub credentials, pushes
-approved tags, verifies that pushed tags resolve to the same digest, and writes
-a manifest with the real Docker Hub digest.
+validation passes, the gated publish job requires Docker Hub credentials,
+pushes one environment-neutral build artifact tag, verifies the pushed digest,
+and writes a manifest with the real Docker Hub digest.
 
-Published tags:
+Published tag:
 
-- QA: `rusman/nextcloud_cron_fmp:34.0.0-qa`
-- QA immutable tags:
-  `rusman/nextcloud_cron_fmp:34.0.0-qa-houselab.<git-sha>` and
-  `rusman/nextcloud_cron_fmp:34.0.0-qa-houselab.<pipeline-id>` when
-  `PUBLISH_IMMUTABLE_TAGS=true`
-- PROD: `rusman/nextcloud_cron_fmp:34.0.0`
-- PROD immutable tags:
-  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<git-sha>` and
-  `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>` when
-  `PUBLISH_IMMUTABLE_TAGS=true`
+- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>`
 
-`latest` is intentionally not used as a deployment selector.
+`latest` is intentionally not used as a deployment selector. Downstream
+deployment should consume the published digest from the manifest, for example
+`rusman/nextcloud_cron_fmp@sha256:...`, and promote the same digest through QA
+and PROD. QA/PROD differences belong to deployment IaC and runtime
+configuration, not to separate image artifacts.
 
 The current CI targets a protected Docker-socket image-build runner with tag
 `homenas-docker-image-build`. The runner job container must have
@@ -120,20 +102,17 @@ Validation-only runs publish a validation artifact with `published: false` and
 `image_digest: null`. This file is not a deployment manifest and must not be
 consumed by the Unraid deployment pipeline.
 
-QA publishing runs publish `artifacts/nextcloud-image-qa-manifest.yaml`. This
-manifest may only be consumed by a QA deployment that uses QA PostgreSQL, QA
-Redis, and QA volumes. It must not be allowed to connect to production
-Nextcloud volumes, production PostgreSQL, or production Redis.
-
-PROD publishing runs publish `artifacts/nextcloud-image-manifest.yaml` with the
-deployment handoff fields required by the production Unraid pipeline:
+Publishing runs publish `artifacts/nextcloud-image-manifest.yaml` with the
+environment-neutral image artifact handoff fields required by downstream
+deployment pipelines:
 
 ```yaml
 published: true
-deployment_environment: "prod"
+artifact_scope: "environment-neutral"
 image_repository: rusman/nextcloud_cron_fmp
-image_tag: "34.0.0"
+image_tag: "34.0.0-houselab.<pipeline-id>"
 image_digest: "sha256:..."
+image_pull_by_digest: "rusman/nextcloud_cron_fmp@sha256:..."
 nextcloud_version: "34.0.0"
 source_project: "hn583/nextcloud_docker"
 source_commit: "..."
