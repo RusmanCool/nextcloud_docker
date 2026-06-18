@@ -302,6 +302,10 @@ RUNTIME_DOCKER_CONTEXT=<runtime-image-context-if-used>
 RUNTIME_DOCKERFILE_PATH=<runtime-image-context-if-used>/Dockerfile
 RUNTIME_IMAGE_REPOSITORY=rusman/nextcloud_php_runtime
 RUNTIME_IMAGE_TAG=<php-runtime-tag-if-used>
+RELEASE_VERIFIER_DOCKER_CONTEXT=<release-verifier-context-if-used>
+RELEASE_VERIFIER_DOCKERFILE_PATH=<release-verifier-context-if-used>/Dockerfile
+RELEASE_VERIFIER_IMAGE_REPOSITORY=rusman/nextcloud_release_verifier
+RELEASE_VERIFIER_IMAGE_TAG=<php-runtime-tag-if-used>
 ```
 
 Each publishing pipeline produces exactly one environment-neutral image
@@ -328,6 +332,10 @@ RUNTIME_DOCKER_CONTEXT=runtime/php/8.2-bookworm
 RUNTIME_DOCKERFILE_PATH=runtime/php/8.2-bookworm/Dockerfile
 RUNTIME_IMAGE_REPOSITORY=rusman/nextcloud_php_runtime
 RUNTIME_IMAGE_TAG=8.2-bookworm
+RELEASE_VERIFIER_DOCKER_CONTEXT=runtime/php/8.2-bookworm-release-verifier
+RELEASE_VERIFIER_DOCKERFILE_PATH=runtime/php/8.2-bookworm-release-verifier/Dockerfile
+RELEASE_VERIFIER_IMAGE_REPOSITORY=rusman/nextcloud_release_verifier
+RELEASE_VERIFIER_IMAGE_TAG=8.2-bookworm
 ```
 
 QA and PROD must deploy the same published digest from the manifest. Do not

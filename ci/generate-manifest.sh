@@ -25,6 +25,8 @@ image_tag="${IMAGE_TAG:-${NEXTCLOUD_VERSION:-34.0.0}}"
 image_digest="${IMAGE_DIGEST:-}"
 runtime_image_ref="${RUNTIME_IMAGE_REF:-}"
 runtime_image_digest="${RUNTIME_IMAGE_DIGEST:-}"
+release_verifier_image_ref="${RELEASE_VERIFIER_IMAGE_REF:-}"
+release_verifier_image_digest="${RELEASE_VERIFIER_IMAGE_DIGEST:-}"
 nextcloud_version="${NEXTCLOUD_VERSION:-34.0.0}"
 source_project="${SOURCE_PROJECT:-${CI_PROJECT_PATH:-hn583/nextcloud_docker}}"
 source_commit="${SOURCE_COMMIT:-${CI_COMMIT_SHA:-unknown}}"
@@ -75,6 +77,11 @@ if [ "$manifest_type" = "published" ]; then
         echo "A published manifest with a runtime image requires a real runtime image digest" >&2
         exit 1
     fi
+
+    if [ -n "$release_verifier_image_ref" ] && ! [[ "$release_verifier_image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+        echo "A published manifest with a release verifier image requires a real release verifier image digest" >&2
+        exit 1
+    fi
 fi
 
 if [ "$manifest_type" = "validation" ]; then
@@ -82,6 +89,7 @@ if [ "$manifest_type" = "validation" ]; then
     published_at_value="null"
     image_pull_by_digest_value="null"
     runtime_image_digest_value="null"
+    release_verifier_image_digest_value="null"
 else
     image_digest_value="\"$image_digest\""
     published_at_value="\"$published_at\""
@@ -90,6 +98,11 @@ else
         runtime_image_digest_value="\"$runtime_image_digest\""
     else
         runtime_image_digest_value="null"
+    fi
+    if [ -n "$release_verifier_image_digest" ]; then
+        release_verifier_image_digest_value="\"$release_verifier_image_digest\""
+    else
+        release_verifier_image_digest_value="null"
     fi
 fi
 
@@ -102,6 +115,8 @@ image_digest: $image_digest_value
 image_pull_by_digest: $image_pull_by_digest_value
 runtime_image_ref: "$runtime_image_ref"
 runtime_image_digest: $runtime_image_digest_value
+release_verifier_image_ref: "$release_verifier_image_ref"
+release_verifier_image_digest: $release_verifier_image_digest_value
 nextcloud_version: "$nextcloud_version"
 source_project: "$source_project"
 source_commit: "$source_commit"
