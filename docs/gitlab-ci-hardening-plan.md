@@ -123,7 +123,7 @@ Stages:
 - Build a shared release verifier image next when
   `RELEASE_VERIFIER_DOCKER_CONTEXT` and `RELEASE_VERIFIER_DOCKERFILE_PATH` are
   set. This supports reusable verifier images such as
-  `rusman/nextcloud_release_verifier:8.2-bookworm`.
+  `rusman/nextcloud_release_verifier:alpine-3.21`.
 - Construct the image inside GitLab CI only.
 - Use only the verified release artifacts from the `verify_release` job for
   Nextcloud source code. The Docker build must not download the Nextcloud

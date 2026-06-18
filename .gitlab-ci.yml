@@ -32,7 +32,7 @@ variables:
   RUNTIME_DOCKER_CONTEXT: ""
   RUNTIME_DOCKERFILE_PATH: ""
   RELEASE_VERIFIER_IMAGE_REPOSITORY: "rusman/nextcloud_release_verifier"
-  RELEASE_VERIFIER_IMAGE_TAG: "8.2-bookworm"
+  RELEASE_VERIFIER_IMAGE_TAG: "alpine-3.21"
   RELEASE_VERIFIER_DOCKER_CONTEXT: ""
   RELEASE_VERIFIER_DOCKERFILE_PATH: ""
   RELEASE_URL: "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2"
@@ -102,7 +102,7 @@ build_smoke:
         test -f "$RELEASE_VERIFIER_DOCKERFILE_PATH" || { echo "RELEASE_VERIFIER_DOCKERFILE_PATH is required when RELEASE_VERIFIER_DOCKER_CONTEXT is set." >&2; exit 1; }
         export RELEASE_VERIFIER_IMAGE_REF="${RELEASE_VERIFIER_IMAGE_REPOSITORY}:${RELEASE_VERIFIER_IMAGE_TAG}"
         echo "Building Nextcloud release verifier image: $RELEASE_VERIFIER_IMAGE_REF"
-        docker build --pull --build-arg NEXTCLOUD_PHP_RUNTIME_IMAGE="${RUNTIME_IMAGE_REPOSITORY}:${RUNTIME_IMAGE_TAG}" --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$RELEASE_VERIFIER_IMAGE_REF" -f "$RELEASE_VERIFIER_DOCKERFILE_PATH" "$RELEASE_VERIFIER_DOCKER_CONTEXT"
+        docker build --pull --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$RELEASE_VERIFIER_IMAGE_REF" -f "$RELEASE_VERIFIER_DOCKERFILE_PATH" "$RELEASE_VERIFIER_DOCKER_CONTEXT"
       else
         export RELEASE_VERIFIER_IMAGE_REF=""
       fi

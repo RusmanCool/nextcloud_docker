@@ -32,9 +32,9 @@ server image then inherits from the published runtime image, for example
 pipelines and runners without inheriting from the previous Nextcloud release
 image or copying PHP binaries/extensions across incompatible bases.
 
-Release verification tooling is also reusable. Verifier image contexts such as
-`runtime/php/8.2-bookworm-release-verifier` inherit from the matching runtime
-image, add `gnupg`/`dirmngr`, and provide
+Release verification tooling is also reusable. The verifier image context
+`runtime/release-verifier/alpine-3.21` uses a minimal Alpine base with
+shell, tar, bzip2, and GPG tooling, and provides
 `/usr/local/bin/verify-nextcloud-release`. Server image Dockerfiles copy the
 verified CI release artifacts into a verifier stage, call that script, and then
 copy only `/usr/src/nextcloud` into the final runtime image.
