@@ -27,6 +27,10 @@ variables:
   IMAGE_REPOSITORY: "rusman/nextcloud_cron_fmp"
   DOCKER_CONTEXT: "34/fpm"
   DOCKERFILE_PATH: "34/fpm/Dockerfile"
+  RUNTIME_IMAGE_REPOSITORY: "rusman/nextcloud_php_runtime"
+  RUNTIME_IMAGE_TAG: "8.2-bookworm"
+  RUNTIME_DOCKER_CONTEXT: ""
+  RUNTIME_DOCKERFILE_PATH: ""
   RELEASE_URL: "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2"
   RELEASE_ASC_URL: "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2.asc"
   RELEASE_SHA256_URL: "https://download.nextcloud.com/server/releases/nextcloud-34.0.0.tar.bz2.sha256"
@@ -48,6 +52,7 @@ static_syntax:
   script:
     - bash -n ci/*.sh
     - test -f "$DOCKERFILE_PATH"
+    - if [ -n "$RUNTIME_DOCKER_CONTEXT" ]; then test -f "$RUNTIME_DOCKERFILE_PATH"; fi
     - sh -n "$DOCKER_CONTEXT"/*.sh
 
 verify_release:
@@ -78,6 +83,15 @@ build_smoke:
   script:
     - mkdir -p artifacts/build artifacts/image
     - touch artifacts/image/.keep
+    - |
+      if [ -n "$RUNTIME_DOCKER_CONTEXT" ]; then
+        test -f "$RUNTIME_DOCKERFILE_PATH" || { echo "RUNTIME_DOCKERFILE_PATH is required when RUNTIME_DOCKER_CONTEXT is set." >&2; exit 1; }
+        export RUNTIME_IMAGE_REF="${RUNTIME_IMAGE_REPOSITORY}:${RUNTIME_IMAGE_TAG}"
+        echo "Building Nextcloud PHP runtime image: $RUNTIME_IMAGE_REF"
+        docker build --pull --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" -t "$RUNTIME_IMAGE_REF" -f "$RUNTIME_DOCKERFILE_PATH" "$RUNTIME_DOCKER_CONTEXT"
+      else
+        export RUNTIME_IMAGE_REF=""
+      fi
     - rm -rf "$DOCKER_CONTEXT/release"
     - mkdir -p "$DOCKER_CONTEXT/release"
     - cp "artifacts/release/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2" "$DOCKER_CONTEXT/release/nextcloud.tar.bz2"
@@ -85,16 +99,21 @@ build_smoke:
     - cp "artifacts/release/nextcloud-${NEXTCLOUD_VERSION}.tar.bz2.sha256" "$DOCKER_CONTEXT/release/nextcloud.tar.bz2.sha256"
     - cp artifacts/release/nextcloud.asc "$DOCKER_CONTEXT/release/nextcloud.asc"
     - export LOCAL_IMAGE_REF="nextcloud-ci:${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}"
-    - docker build --pull --build-arg NEXTCLOUD_SHA256="$NEXTCLOUD_SHA256" --build-arg NEXTCLOUD_GPG_FINGERPRINT="$NEXTCLOUD_GPG_FINGERPRINT" --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" --label "org.opencontainers.image.version=$NEXTCLOUD_VERSION" -t "$LOCAL_IMAGE_REF" -f "$DOCKERFILE_PATH" "$DOCKER_CONTEXT"
+    - docker build --pull --build-arg NEXTCLOUD_PHP_RUNTIME_IMAGE="${RUNTIME_IMAGE_REPOSITORY}:${RUNTIME_IMAGE_TAG}" --build-arg NEXTCLOUD_SHA256="$NEXTCLOUD_SHA256" --build-arg NEXTCLOUD_GPG_FINGERPRINT="$NEXTCLOUD_GPG_FINGERPRINT" --label "org.opencontainers.image.source=$CI_PROJECT_URL" --label "org.opencontainers.image.revision=$CI_COMMIT_SHA" --label "org.opencontainers.image.version=$NEXTCLOUD_VERSION" -t "$LOCAL_IMAGE_REF" -f "$DOCKERFILE_PATH" "$DOCKER_CONTEXT"
     - IMAGE_REF="$LOCAL_IMAGE_REF" ./ci/smoke-test.sh
     - |
       {
         echo "LOCAL_IMAGE_REF=$LOCAL_IMAGE_REF"
         echo "BUILD_IMAGE_ARCHIVE=artifacts/image/nextcloud-image.tar.gz"
+        echo "RUNTIME_IMAGE_REF=$RUNTIME_IMAGE_REF"
+        echo "RUNTIME_IMAGE_ARCHIVE=artifacts/image/nextcloud-php-runtime.tar.gz"
         echo "SMOKE_TESTS_PASSED=true"
       } > artifacts/build/build.env
     - |
       if [ "$PUBLISH_IMAGE" = "true" ]; then
+        if [ -n "$RUNTIME_IMAGE_REF" ]; then
+          docker save "$RUNTIME_IMAGE_REF" | gzip -c > artifacts/image/nextcloud-php-runtime.tar.gz
+        fi
         docker save "$LOCAL_IMAGE_REF" | gzip -c > artifacts/image/nextcloud-image.tar.gz
       else
         echo "PUBLISH_IMAGE is false; skipping image archive artifact for validation-only run."
@@ -142,19 +161,39 @@ publish_image:
       echo "  nextcloud_version=$NEXTCLOUD_VERSION"
       echo "  build_image_archive=$BUILD_IMAGE_ARCHIVE"
     - test -s "$BUILD_IMAGE_ARCHIVE" || { echo "Build image archive is missing; cannot publish the smoke-tested image." >&2; exit 1; }
+    - if [ -n "$RUNTIME_IMAGE_REF" ]; then test -s "$RUNTIME_IMAGE_ARCHIVE" || { echo "Runtime image archive is missing; cannot publish the runtime image." >&2; exit 1; }; fi
     - echo "Loading smoke-tested image archive from $BUILD_IMAGE_ARCHIVE"
     - docker load -i "$BUILD_IMAGE_ARCHIVE"
+    - |
+      if [ -n "$RUNTIME_IMAGE_REF" ]; then
+        echo "Loading runtime image archive from $RUNTIME_IMAGE_ARCHIVE"
+        docker load -i "$RUNTIME_IMAGE_ARCHIVE"
+      fi
     - echo "Docker tag to publish:"
     - echo "  $IMAGE_REPOSITORY:$IMAGE_TAG"
+    - if [ -n "$RUNTIME_IMAGE_REF" ]; then echo "  $RUNTIME_IMAGE_REF"; fi
     - docker tag "$LOCAL_IMAGE_REF" "$IMAGE_REPOSITORY:$IMAGE_TAG"
     - echo "Logging in to Docker Hub as $DOCKERHUB_USERNAME"
     - printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+    - |
+      if [ -n "$RUNTIME_IMAGE_REF" ]; then
+        echo "Pushing $RUNTIME_IMAGE_REF"
+        docker push "$RUNTIME_IMAGE_REF"
+        export PUBLISHED_RUNTIME_IMAGE_REF="$RUNTIME_IMAGE_REF"
+      else
+        export PUBLISHED_RUNTIME_IMAGE_REF=""
+      fi
     - echo "Pushing $IMAGE_REPOSITORY:$IMAGE_TAG"
     - docker push "$IMAGE_REPOSITORY:$IMAGE_TAG"
     - echo "Verifying published Docker Hub digests"
     - ./ci/verify-published-digest.sh
-    - echo "Removing local image refs after verified publish: $LOCAL_IMAGE_REF $IMAGE_REPOSITORY:$IMAGE_TAG"
-    - docker image rm "$LOCAL_IMAGE_REF" "$IMAGE_REPOSITORY:$IMAGE_TAG"
+    - |
+      cleanup_refs="$LOCAL_IMAGE_REF $IMAGE_REPOSITORY:$IMAGE_TAG"
+      if [ -n "$RUNTIME_IMAGE_REF" ]; then
+        cleanup_refs="$cleanup_refs $RUNTIME_IMAGE_REF"
+      fi
+      echo "Removing local image refs after verified publish: $cleanup_refs"
+      docker image rm $cleanup_refs
   artifacts:
     when: on_success
     reports:

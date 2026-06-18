@@ -117,6 +117,9 @@ Stages:
 
 `build_smoke`:
 
+- Build a shared PHP runtime image first when `RUNTIME_DOCKER_CONTEXT` and
+  `RUNTIME_DOCKERFILE_PATH` are set. This supports reusable runtime images such
+  as `rusman/nextcloud_php_runtime:8.2-bookworm`.
 - Construct the image inside GitLab CI only.
 - Use only the verified release artifacts from the `verify_release` job for
   Nextcloud source code. The Docker build must not download the Nextcloud
@@ -131,6 +134,8 @@ Stages:
 
 - Run only when `PUBLISH_IMAGE == "true"`.
 - Require Docker Hub secret variables to exist.
+- Push the shared PHP runtime image first when one was built for the selected
+  target.
 - Push exactly one environment-neutral build artifact tag.
 - Verify that the pushed tag resolves to a real digest.
 - Fail if digest verification fails.

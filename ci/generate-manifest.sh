@@ -23,6 +23,8 @@ esac
 image_repository="${IMAGE_REPOSITORY:-rusman/nextcloud_cron_fmp}"
 image_tag="${IMAGE_TAG:-${NEXTCLOUD_VERSION:-34.0.0}}"
 image_digest="${IMAGE_DIGEST:-}"
+runtime_image_ref="${RUNTIME_IMAGE_REF:-}"
+runtime_image_digest="${RUNTIME_IMAGE_DIGEST:-}"
 nextcloud_version="${NEXTCLOUD_VERSION:-34.0.0}"
 source_project="${SOURCE_PROJECT:-${CI_PROJECT_PATH:-hn583/nextcloud_docker}}"
 source_commit="${SOURCE_COMMIT:-${CI_COMMIT_SHA:-unknown}}"
@@ -32,11 +34,17 @@ image_base="${IMAGE_BASE:-}"
 if [ -z "$image_base" ] && [ -f "$dockerfile_path" ]; then
     image_base="$(awk '$1 == "FROM" { print $2; exit }' "$dockerfile_path")"
 fi
+if [ -n "$runtime_image_ref" ]; then
+    case "$image_base" in
+        *'$'*|"") image_base="$runtime_image_ref" ;;
+    esac
+fi
 image_base="${image_base:-unknown}"
 php_version="${PHP_VERSION:-}"
 if [ -z "$php_version" ]; then
     case "$image_base" in
         php:*) php_version="${image_base#php:}"; php_version="${php_version%%-*}" ;;
+        *:*) php_version="${image_base##*:}"; php_version="${php_version%%-*}" ;;
         *) php_version="unknown" ;;
     esac
 fi
@@ -62,16 +70,27 @@ if [ "$manifest_type" = "published" ]; then
         echo "A published manifest requires verified release artifacts and passing smoke tests" >&2
         exit 1
     fi
+
+    if [ -n "$runtime_image_ref" ] && ! [[ "$runtime_image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+        echo "A published manifest with a runtime image requires a real runtime image digest" >&2
+        exit 1
+    fi
 fi
 
 if [ "$manifest_type" = "validation" ]; then
     image_digest_value="null"
     published_at_value="null"
     image_pull_by_digest_value="null"
+    runtime_image_digest_value="null"
 else
     image_digest_value="\"$image_digest\""
     published_at_value="\"$published_at\""
     image_pull_by_digest_value="\"${image_repository}@${image_digest}\""
+    if [ -n "$runtime_image_digest" ]; then
+        runtime_image_digest_value="\"$runtime_image_digest\""
+    else
+        runtime_image_digest_value="null"
+    fi
 fi
 
 cat > "$manifest_path" <<EOF
@@ -81,6 +100,8 @@ image_repository: $image_repository
 image_tag: "$image_tag"
 image_digest: $image_digest_value
 image_pull_by_digest: $image_pull_by_digest_value
+runtime_image_ref: "$runtime_image_ref"
+runtime_image_digest: $runtime_image_digest_value
 nextcloud_version: "$nextcloud_version"
 source_project: "$source_project"
 source_commit: "$source_commit"

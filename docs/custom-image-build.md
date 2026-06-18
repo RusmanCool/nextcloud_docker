@@ -25,6 +25,13 @@ PHP 8.2, 8.3, 8.4, and 8.5 as supported for the current release, with 8.2
 deprecated. PHP 8.4 on Debian trixie matches current upstream Nextcloud Docker
 practice while keeping a conservative stable runtime.
 
+Reusable PHP/package/extension layers live in separate runtime image contexts
+under `runtime/php/`, for example `runtime/php/8.2-bookworm`. The matching
+server image then inherits from the published runtime image, for example
+`rusman/nextcloud_php_runtime:8.2-bookworm`. This gives real reuse across
+pipelines and runners without inheriting from the previous Nextcloud release
+image or copying PHP binaries/extensions across incompatible bases.
+
 ## Static Checks Only
 
 Do not construct, run, publish, or verify image artifacts from a developer

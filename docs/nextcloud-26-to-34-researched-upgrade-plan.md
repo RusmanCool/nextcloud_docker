@@ -298,6 +298,10 @@ RELEASE_ASC_URL=https://download.nextcloud.com/server/releases/nextcloud-<versio
 RELEASE_SHA256_URL=https://download.nextcloud.com/server/releases/nextcloud-<version>.tar.bz2.sha256
 DOCKER_CONTEXT=<versioned-image-context>
 DOCKERFILE_PATH=<versioned-image-context>/Dockerfile
+RUNTIME_DOCKER_CONTEXT=<runtime-image-context-if-used>
+RUNTIME_DOCKERFILE_PATH=<runtime-image-context-if-used>/Dockerfile
+RUNTIME_IMAGE_REPOSITORY=rusman/nextcloud_php_runtime
+RUNTIME_IMAGE_TAG=<php-runtime-tag-if-used>
 ```
 
 Each publishing pipeline produces exactly one environment-neutral image
@@ -314,6 +318,17 @@ artifact tag and one published manifest:
 | 32.0.11 | `rusman/nextcloud_cron_fmp:32.0.11-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
 | 33.0.5 | `rusman/nextcloud_cron_fmp:33.0.5-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
 | 34.0.0 | `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>` | `artifacts/nextcloud-image-manifest.yaml` |
+
+For the first 26.0.13 image, use:
+
+```text
+DOCKER_CONTEXT=26/26.0.13/fpm
+DOCKERFILE_PATH=26/26.0.13/fpm/Dockerfile
+RUNTIME_DOCKER_CONTEXT=runtime/php/8.2-bookworm
+RUNTIME_DOCKERFILE_PATH=runtime/php/8.2-bookworm/Dockerfile
+RUNTIME_IMAGE_REPOSITORY=rusman/nextcloud_php_runtime
+RUNTIME_IMAGE_TAG=8.2-bookworm
+```
 
 QA and PROD must deploy the same published digest from the manifest. Do not
 rebuild or republish a different image between QA acceptance and PROD
