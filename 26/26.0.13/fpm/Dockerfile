@@ -1,4 +1,3 @@
-# DO NOT EDIT: created by update.sh from Dockerfile-debian.template
 ARG NEXTCLOUD_PHP_RUNTIME_IMAGE=rusman/nextcloud_php_runtime:8.2-bookworm
 ARG NEXTCLOUD_RELEASE_VERIFIER_IMAGE=rusman/nextcloud_release_verifier:alpine-3.21
 FROM ${NEXTCLOUD_RELEASE_VERIFIER_IMAGE} AS nextcloud-release-verifier
