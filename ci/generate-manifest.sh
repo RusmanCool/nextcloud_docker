@@ -21,17 +21,17 @@ case "$manifest_type" in
 esac
 
 image_repository="${IMAGE_REPOSITORY:-rusman/nextcloud_cron_fmp}"
-image_tag="${IMAGE_TAG:-${NEXTCLOUD_VERSION:-34.0.0}}"
+image_tag="${IMAGE_TAG:-${NEXTCLOUD_VERSION:-26.0.13}}"
 image_digest="${IMAGE_DIGEST:-}"
 runtime_image_ref="${RUNTIME_IMAGE_REF:-}"
 runtime_image_digest="${RUNTIME_IMAGE_DIGEST:-}"
 release_verifier_image_ref="${RELEASE_VERIFIER_IMAGE_REF:-}"
 release_verifier_image_digest="${RELEASE_VERIFIER_IMAGE_DIGEST:-}"
-nextcloud_version="${NEXTCLOUD_VERSION:-34.0.0}"
+nextcloud_version="${NEXTCLOUD_VERSION:-26.0.13}"
 source_project="${SOURCE_PROJECT:-${CI_PROJECT_PATH:-hn583/nextcloud_docker}}"
 source_commit="${SOURCE_COMMIT:-${CI_COMMIT_SHA:-unknown}}"
 source_ref="${SOURCE_REF:-${CI_COMMIT_REF_NAME:-unknown}}"
-dockerfile_path="${DOCKERFILE_PATH:-34/fpm/Dockerfile}"
+dockerfile_path="${DOCKERFILE_PATH:-26/26.0.13/fpm/Dockerfile}"
 image_base="${IMAGE_BASE:-}"
 if [ -z "$image_base" ] && [ -f "$dockerfile_path" ]; then
     image_base="$(awk '$1 == "FROM" { print $2; exit }' "$dockerfile_path")"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-nextcloud_version="${NEXTCLOUD_VERSION:-34.0.0}"
+nextcloud_version="${NEXTCLOUD_VERSION:-26.0.13}"
 release_url="${RELEASE_URL:-https://download.nextcloud.com/server/releases/nextcloud-${nextcloud_version}.tar.bz2}"
 release_asc_url="${RELEASE_ASC_URL:-${release_url}.asc}"
 release_sha256_url="${RELEASE_SHA256_URL:-${release_url}.sha256}"

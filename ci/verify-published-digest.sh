@@ -9,8 +9,25 @@ artifact_dir="${ARTIFACT_DIR:-artifacts}"
 
 mkdir -p "$artifact_dir"
 
+is_dockerhub_ref() {
+    local ref_without_tag first_segment
+    ref_without_tag="${1%%:*}"
+    first_segment="${ref_without_tag%%/*}"
+
+    case "$first_segment" in
+        *.*|*:*|localhost) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
 inspect_digest() {
     local ref="$1"
+
+    if ! is_dockerhub_ref "$ref"; then
+        echo "Ref is not a Docker Hub ref, skipping docker buildx imagetools inspect: $ref" >&2
+        return 1
+    fi
+
     docker buildx imagetools inspect "$ref" | awk '$1 == "Digest:" { print $2; exit }'
 }
 

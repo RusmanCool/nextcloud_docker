@@ -77,6 +77,28 @@ Trigger-time variables:
 - `PUBLISH_IMAGE`
   - Default: `false`
   - Set to `true` only when Docker Hub publishing is approved for this run.
+- `BUILD_NEXTCLOUD_IMAGE`
+  - Default: `true`
+  - Set to `false` for a maintenance run that should only resolve, build, or
+    publish shared runtime/verifier images.
+- `USE_RUNTIME_IMAGE`
+  - Default for the current 26.0.13 target: `true`
+  - Set to `true` for image contexts that inherit from a shared PHP runtime
+    image.
+- `FORCE_REBUILD_RUNTIME`
+  - Default: `false`
+  - When `true`, build the shared runtime image. When `false`, CI first tries
+    Docker Hub for the configured runtime image and then the local Docker
+    daemon.
+- `USE_RELEASE_VERIFIER_IMAGE`
+  - Default for the current 26.0.13 target: `true`
+  - Set to `true` for image contexts that use the shared release verifier
+    image.
+- `FORCE_REBUILD_VERIFIER`
+  - Default: `false`
+  - When `true`, build the shared verifier image. When `false`, CI first tries
+    Docker Hub for the configured verifier image and then the local Docker
+    daemon.
 
 With `PUBLISH_IMAGE=false`, CI verifies the release checksum and PGP signature,
 passes the verified release artifacts into the Docker build context, constructs
@@ -90,9 +112,21 @@ validation passes, the gated publish job requires Docker Hub credentials,
 pushes one environment-neutral build artifact tag, verifies the pushed digest,
 and writes a manifest with the real Docker Hub digest.
 
+The root `.gitlab-ci.yml` includes smaller CI files under `.gitlab/ci/`:
+`common.yml`, `runtime.yml`, `verifier.yml`, `nextcloud.yml`, and
+`manifest.yml`. These jobs still run under one manual root pipeline so the same
+runtime, verifier, and Nextcloud image artifacts can be chained and recorded in
+one manifest.
+
+When `BUILD_NEXTCLOUD_IMAGE=false`, the release verification, Nextcloud server
+image build, smoke test, and manifest jobs are skipped. This is intended for
+shared-image maintenance runs, such as rebuilding only
+`rusman/nextcloud_php_runtime:8.2-bookworm` or only
+`rusman/nextcloud_release_verifier:alpine-3.21`.
+
 Published tag:
 
-- `rusman/nextcloud_cron_fmp:34.0.0-houselab.<pipeline-id>`
+- `rusman/nextcloud_cron_fmp:<NEXTCLOUD_VERSION>-houselab.<pipeline-id>`
 
 `latest` is intentionally not used as a deployment selector. Downstream
 deployment should consume the published digest from the manifest, for example

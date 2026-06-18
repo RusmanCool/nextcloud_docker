@@ -1,0 +1,32 @@
+release_verifier_image:
+  extends: .docker_socket
+  stage: verifier
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $USE_RELEASE_VERIFIER_IMAGE == "true"'
+      when: on_success
+    - when: never
+  script:
+    - |
+      if [ "$PUBLISH_IMAGE" = "true" ] && [ "$FORCE_REBUILD_VERIFIER" = "true" ]; then
+        test -n "${DOCKERHUB_USERNAME:-}" || { echo "DOCKERHUB_USERNAME is required for publishing." >&2; exit 1; }
+        test -n "${DOCKERHUB_TOKEN:-}" || { echo "DOCKERHUB_TOKEN is required for publishing." >&2; exit 1; }
+        printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      fi
+    - |
+      IMAGE_REF="${RELEASE_VERIFIER_IMAGE_REPOSITORY}:${RELEASE_VERIFIER_IMAGE_TAG}" \
+      IMAGE_KIND="release verifier" \
+      ENV_PREFIX="RELEASE_VERIFIER" \
+      FORCE_REBUILD="$FORCE_REBUILD_VERIFIER" \
+      PUBLISH_IMAGE="$PUBLISH_IMAGE" \
+      DOCKER_CONTEXT="$RELEASE_VERIFIER_DOCKER_CONTEXT" \
+      DOCKERFILE_PATH="$RELEASE_VERIFIER_DOCKERFILE_PATH" \
+      ARCHIVE_PATH="artifacts/image/nextcloud-release-verifier.tar.gz" \
+      ENV_PATH="artifacts/verifier/verifier.env" \
+      ./ci/resolve-or-build-image.sh
+  artifacts:
+    when: on_success
+    reports:
+      dotenv: artifacts/verifier/verifier.env
+    paths:
+      - artifacts/verifier/verifier.env
+      - artifacts/image/nextcloud-release-verifier.tar.gz

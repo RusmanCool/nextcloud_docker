@@ -1,0 +1,32 @@
+runtime_image:
+  extends: .docker_socket
+  stage: runtime
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" && $USE_RUNTIME_IMAGE == "true"'
+      when: on_success
+    - when: never
+  script:
+    - |
+      if [ "$PUBLISH_IMAGE" = "true" ] && [ "$FORCE_REBUILD_RUNTIME" = "true" ]; then
+        test -n "${DOCKERHUB_USERNAME:-}" || { echo "DOCKERHUB_USERNAME is required for publishing." >&2; exit 1; }
+        test -n "${DOCKERHUB_TOKEN:-}" || { echo "DOCKERHUB_TOKEN is required for publishing." >&2; exit 1; }
+        printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      fi
+    - |
+      IMAGE_REF="${RUNTIME_IMAGE_REPOSITORY}:${RUNTIME_IMAGE_TAG}" \
+      IMAGE_KIND="runtime" \
+      ENV_PREFIX="RUNTIME" \
+      FORCE_REBUILD="$FORCE_REBUILD_RUNTIME" \
+      PUBLISH_IMAGE="$PUBLISH_IMAGE" \
+      DOCKER_CONTEXT="$RUNTIME_DOCKER_CONTEXT" \
+      DOCKERFILE_PATH="$RUNTIME_DOCKERFILE_PATH" \
+      ARCHIVE_PATH="artifacts/image/nextcloud-php-runtime.tar.gz" \
+      ENV_PATH="artifacts/runtime/runtime.env" \
+      ./ci/resolve-or-build-image.sh
+  artifacts:
+    when: on_success
+    reports:
+      dotenv: artifacts/runtime/runtime.env
+    paths:
+      - artifacts/runtime/runtime.env
+      - artifacts/image/nextcloud-php-runtime.tar.gz

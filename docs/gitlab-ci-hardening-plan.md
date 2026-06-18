@@ -78,9 +78,33 @@ Required parameters:
   - Options: `false`, `true`
   - Meaning: when `false`, the pipeline may verify, construct, and smoke-test
     the image, but must not log in to Docker Hub or push tags.
+- `BUILD_NEXTCLOUD_IMAGE`
+  - Default: `true`
+  - Options: `false`, `true`
+  - Meaning: when `false`, the pipeline can run shared runtime/verifier image
+    maintenance without verifying or building a Nextcloud server image.
 The published image tag is not operator-selected. When `PUBLISH_IMAGE=true`,
 the pipeline publishes exactly one environment-neutral artifact tag:
 `<NEXTCLOUD_VERSION>-houselab.<CI_PIPELINE_ID>`.
+
+Shared image controls:
+
+- `USE_RUNTIME_IMAGE`
+  - Default for the current 26.0.13 target: `true`
+  - Meaning: resolve a shared PHP runtime image before building the Nextcloud
+    server image.
+- `FORCE_REBUILD_RUNTIME`
+  - Default: `false`
+  - Meaning: build the shared runtime image instead of requiring an existing
+    Docker Hub or local image.
+- `USE_RELEASE_VERIFIER_IMAGE`
+  - Default for the current 26.0.13 target: `true`
+  - Meaning: resolve a shared release verifier image before building the
+    Nextcloud server image.
+- `FORCE_REBUILD_VERIFIER`
+  - Default: `false`
+  - Meaning: build the shared verifier image instead of requiring an existing
+    Docker Hub or local image.
 
 Branch selection should use GitLab's built-in branch/tag dropdown on the Run
 Pipeline page. A separate `BRANCH_TO_USE` variable should be avoided unless
@@ -92,8 +116,9 @@ Stages:
 
 - `static`
 - `verify_release`
-- `build_smoke`
-- `publish`
+- `runtime`
+- `verifier`
+- `nextcloud`
 - `manifest`
 
 `static`:
@@ -105,6 +130,7 @@ Stages:
 
 `verify_release`:
 
+- Run only when `BUILD_NEXTCLOUD_IMAGE == "true"`.
 - Download the pinned Nextcloud release archive, checksum file, signature, and
   public signing key.
 - Verify checksum.
@@ -115,41 +141,39 @@ Stages:
   failed checkout or script cannot publish stale files from a reused runner
   workspace.
 
-`build_smoke`:
+`runtime`:
 
-- Build a shared PHP runtime image first when `RUNTIME_DOCKER_CONTEXT` and
-  `RUNTIME_DOCKERFILE_PATH` are set. This supports reusable runtime images such
-  as `rusman/nextcloud_php_runtime:8.2-bookworm`.
-- Build a shared release verifier image next when
-  `RELEASE_VERIFIER_DOCKER_CONTEXT` and `RELEASE_VERIFIER_DOCKERFILE_PATH` are
-  set. This supports reusable verifier images such as
-  `rusman/nextcloud_release_verifier:alpine-3.21`.
+- Run only when `USE_RUNTIME_IMAGE == "true"`.
+- Resolve the configured runtime image from Docker Hub only for Docker Hub
+  image refs, then pull and archive it for downstream jobs.
+- If Docker Hub is unavailable or the image does not exist, fall back to the
+  local Docker daemon.
+- If neither remote nor local image exists, build only when
+  `FORCE_REBUILD_RUNTIME == "true"`; otherwise fail with a clear message.
+
+`verifier`:
+
+- Run only when `USE_RELEASE_VERIFIER_IMAGE == "true"`.
+- Apply the same remote, local, and force-rebuild behavior for the shared
+  release verifier image.
+
+`nextcloud`:
+
+- Run only when `BUILD_NEXTCLOUD_IMAGE == "true"`.
 - Construct the image inside GitLab CI only.
 - Use only the verified release artifacts from the `verify_release` job for
   Nextcloud source code. The Docker build must not download the Nextcloud
   release archive, checksum, signature, or signing key a second time.
 - Run image smoke tests inside GitLab CI only.
-- Save build metadata needed by later jobs.
-- Save a compressed image archive only when `PUBLISH_IMAGE=true`, so the publish
-  job can push the same image that passed smoke tests.
-- Never push Docker tags from this job.
-
-`publish`:
-
-- Run only when `PUBLISH_IMAGE == "true"`.
-- Require Docker Hub secret variables to exist.
-- Push the shared PHP runtime image first when one was built for the selected
-  target.
-- Push the shared release verifier image next when one was built for the
-  selected target.
-- Push exactly one environment-neutral build artifact tag.
-- Verify that the pushed tag resolves to a real digest.
-- Fail if digest verification fails.
-- Upload trusted build, digest, and manifest artifacts only on successful job
-  completion.
+- Load runtime and verifier image archives from upstream jobs when those shared
+  images are enabled.
+- Push exactly one environment-neutral Nextcloud artifact tag when
+  `PUBLISH_IMAGE == "true"` and verify that the pushed tag resolves to a real
+  digest.
 
 `manifest`:
 
+- Run only when `BUILD_NEXTCLOUD_IMAGE == "true"`.
 - For non-publishing runs, publish a validation manifest or build report that
   clearly states no Docker Hub digest was produced.
 - For publishing runs, publish an environment-neutral artifact manifest
@@ -219,17 +243,17 @@ image_digest: null
 ```
 
 The downstream Unraid deployment pipeline must consume only a matching manifest
-from a publishing run. QA manifests must be routed only to QA PostgreSQL, QA
-Redis, and QA volumes. PROD manifests must be routed only to production
-resources.
+from a publishing run. The same digest should be promoted through QA and PROD;
+environment separation belongs to deployment IaC.
 
 ## Hardening Task Status
 
 1. Done: added `workflow: rules` that allow only manual web pipelines.
-2. Done: split validation into `build_smoke` and publishing into gated
-   `publish_image`.
+2. Done: split validation into shared-image resolution, `nextcloud`, and
+   `manifest` jobs.
 3. Done: added trigger-time variables with safe defaults and dropdown options.
-4. Done: Docker Hub login and push commands exist only in `publish_image`.
+4. Done: Docker Hub login and push commands exist only in jobs that publish
+   selected artifacts.
 5. Done: manifest generation distinguishes validation-only artifacts from
    production deployment manifests.
 6. Done: CI targets the protected Docker-socket image-build runner tagged

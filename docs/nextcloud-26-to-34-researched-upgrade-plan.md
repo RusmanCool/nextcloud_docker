@@ -292,6 +292,11 @@ For each target major, run the GitLab UI pipeline with:
 
 ```text
 PUBLISH_IMAGE=true
+BUILD_NEXTCLOUD_IMAGE=true
+USE_RUNTIME_IMAGE=<true-if-runtime-image-is-used>
+FORCE_REBUILD_RUNTIME=<true-only-when-runtime-image-must-be-built>
+USE_RELEASE_VERIFIER_IMAGE=<true-if-release-verifier-image-is-used>
+FORCE_REBUILD_VERIFIER=<true-only-when-verifier-image-must-be-built>
 NEXTCLOUD_VERSION=<version>
 RELEASE_URL=https://download.nextcloud.com/server/releases/nextcloud-<version>.tar.bz2
 RELEASE_ASC_URL=https://download.nextcloud.com/server/releases/nextcloud-<version>.tar.bz2.asc
@@ -328,10 +333,14 @@ For the first 26.0.13 image, use:
 ```text
 DOCKER_CONTEXT=26/26.0.13/fpm
 DOCKERFILE_PATH=26/26.0.13/fpm/Dockerfile
+USE_RUNTIME_IMAGE=true
+FORCE_REBUILD_RUNTIME=true
 RUNTIME_DOCKER_CONTEXT=runtime/php/8.2-bookworm
 RUNTIME_DOCKERFILE_PATH=runtime/php/8.2-bookworm/Dockerfile
 RUNTIME_IMAGE_REPOSITORY=rusman/nextcloud_php_runtime
 RUNTIME_IMAGE_TAG=8.2-bookworm
+USE_RELEASE_VERIFIER_IMAGE=true
+FORCE_REBUILD_VERIFIER=true
 RELEASE_VERIFIER_DOCKER_CONTEXT=runtime/release-verifier/alpine-3.21
 RELEASE_VERIFIER_DOCKERFILE_PATH=runtime/release-verifier/alpine-3.21/Dockerfile
 RELEASE_VERIFIER_IMAGE_REPOSITORY=rusman/nextcloud_release_verifier

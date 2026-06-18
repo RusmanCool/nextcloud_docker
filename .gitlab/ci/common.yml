@@ -1,0 +1,94 @@
+stages:
+  - static
+  - verify_release
+  - runtime
+  - verifier
+  - nextcloud
+  - manifest
+
+default:
+  tags:
+    - homenas-docker-image-build
+
+variables:
+  PUBLISH_IMAGE:
+    value: "false"
+    options:
+      - "false"
+      - "true"
+    description: "Publish environment-neutral image artifact tags and manifest."
+  BUILD_NEXTCLOUD_IMAGE:
+    value: "true"
+    options:
+      - "false"
+      - "true"
+    description: "Verify the Nextcloud release, build the server image, run smoke tests, and write a manifest."
+  USE_RUNTIME_IMAGE:
+    value: "true"
+    options:
+      - "false"
+      - "true"
+    description: "Resolve or build the shared PHP runtime image before the Nextcloud image."
+  FORCE_REBUILD_RUNTIME:
+    value: "false"
+    options:
+      - "false"
+      - "true"
+    description: "Build the shared PHP runtime image instead of using an existing remote/local image."
+  USE_RELEASE_VERIFIER_IMAGE:
+    value: "true"
+    options:
+      - "false"
+      - "true"
+    description: "Resolve or build the shared release verifier image before the Nextcloud image."
+  FORCE_REBUILD_VERIFIER:
+    value: "false"
+    options:
+      - "false"
+      - "true"
+    description: "Build the shared release verifier image instead of using an existing remote/local image."
+  DOCKER_BUILDKIT: "1"
+  NEXTCLOUD_VERSION: "26.0.13"
+  IMAGE_REPOSITORY: "rusman/nextcloud_cron_fmp"
+  DOCKER_CONTEXT: "26/26.0.13/fpm"
+  DOCKERFILE_PATH: "26/26.0.13/fpm/Dockerfile"
+  RUNTIME_IMAGE_REPOSITORY: "rusman/nextcloud_php_runtime"
+  RUNTIME_IMAGE_TAG: "8.2-bookworm"
+  RUNTIME_DOCKER_CONTEXT: "runtime/php/8.2-bookworm"
+  RUNTIME_DOCKERFILE_PATH: "runtime/php/8.2-bookworm/Dockerfile"
+  RELEASE_VERIFIER_IMAGE_REPOSITORY: "rusman/nextcloud_release_verifier"
+  RELEASE_VERIFIER_IMAGE_TAG: "alpine-3.21"
+  RELEASE_VERIFIER_DOCKER_CONTEXT: "runtime/release-verifier/alpine-3.21"
+  RELEASE_VERIFIER_DOCKERFILE_PATH: "runtime/release-verifier/alpine-3.21/Dockerfile"
+  RELEASE_URL: "https://download.nextcloud.com/server/releases/nextcloud-26.0.13.tar.bz2"
+  RELEASE_ASC_URL: "https://download.nextcloud.com/server/releases/nextcloud-26.0.13.tar.bz2.asc"
+  RELEASE_SHA256_URL: "https://download.nextcloud.com/server/releases/nextcloud-26.0.13.tar.bz2.sha256"
+  NEXTCLOUD_GPG_KEY_URL: "https://nextcloud.com/nextcloud.asc"
+  NEXTCLOUD_GPG_FINGERPRINT: "28806A878AE423A28372792ED75899B9A724937A"
+
+.docker_socket:
+  image: docker:27.5.1
+  before_script:
+    - apk add --no-cache bash coreutils curl gnupg gzip
+    - test -S /var/run/docker.sock || { echo "Docker socket runner is required at /var/run/docker.sock." >&2; exit 1; }
+    - docker version
+
+.dockerhub_login:
+  before_script:
+    - test -n "${DOCKERHUB_USERNAME:-}" || { echo "DOCKERHUB_USERNAME is required for publishing." >&2; exit 1; }
+    - test -n "${DOCKERHUB_TOKEN:-}" || { echo "DOCKERHUB_TOKEN is required for publishing." >&2; exit 1; }
+    - printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+static_syntax:
+  stage: static
+  image: alpine:3.21
+  before_script:
+    - apk add --no-cache bash python3 py3-yaml
+  script:
+    - bash -n ci/*.sh
+    - bash -n runtime/release-verifier/alpine-3.21/verify-nextcloud-release.sh
+    - python3 -c 'import yaml; files=[".gitlab-ci.yml",".gitlab/ci/common.yml",".gitlab/ci/runtime.yml",".gitlab/ci/verifier.yml",".gitlab/ci/nextcloud.yml",".gitlab/ci/manifest.yml"]; [yaml.safe_load(open(f)) for f in files]; print("yaml ok")'
+    - if [ "$BUILD_NEXTCLOUD_IMAGE" = "true" ]; then test -f "$DOCKERFILE_PATH"; fi
+    - if [ "$USE_RUNTIME_IMAGE" = "true" ]; then test -f "$RUNTIME_DOCKERFILE_PATH"; fi
+    - if [ "$USE_RELEASE_VERIFIER_IMAGE" = "true" ]; then test -f "$RELEASE_VERIFIER_DOCKERFILE_PATH"; fi
+    - if [ "$BUILD_NEXTCLOUD_IMAGE" = "true" ]; then sh -n "$DOCKER_CONTEXT"/*.sh; fi
